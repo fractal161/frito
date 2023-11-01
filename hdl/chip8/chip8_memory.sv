@@ -34,7 +34,7 @@ module chip8_memory(
       .enb(),
       .regceb(),
       .rstb(rst_in),
-      .doutb(),
+      .doutb()
 
     );
 

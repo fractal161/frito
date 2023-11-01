@@ -15,6 +15,8 @@ if {[llength $files] != 0} {
     puts "$outputDir is empty"
 }
 
+package require fileutil
+
 # read in all system veriilog files:
 read_verilog -sv [ ::fileutil::findByPattern . -glob {*.sv} ]
 # uncomment line below if verilog (.v) files present:

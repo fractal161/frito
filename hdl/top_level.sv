@@ -24,6 +24,12 @@ module top_level(
   logic clk_pixel, clk_5x; //clock lines
   logic locked; //locked signal (we'll leave unused but still hook it up)
 
+  // TODO: fill out params as needed
+  chip8 chip8 (
+      .clk_in(clk_100mhz),
+      .rst_in(sys_rst)
+    );
+
   //clock manager...creates 74.25 Hz and 5 times 74.25 MHz for pixel and TMDS
   hdmi_clk_wiz_720p mhdmicw (
       .reset(0),

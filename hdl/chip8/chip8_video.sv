@@ -16,14 +16,14 @@ module chip8_video(
     input wire ad_in,
 
     // sprite drawing info
-    input logic [11:0] sprite_addr_in,
-    input logic [10:0] sprite_pos_in,
+    input wire [11:0] sprite_addr_in,
+    input wire [10:0] sprite_pos_in,
 
     // receive sprite data from memory
     input wire mem_valid_in,
     input wire [1:0] mem_in,
 
-    // config (TODO: is light color 0 or 1?)
+    // config (TODO: I think 0 is light, 1 is dark, but not sure)
     input wire [23:0] light_color_in,
     input wire [23:0] dark_color_in,
 
@@ -36,6 +36,8 @@ module chip8_video(
 
   // pixel data is red from main buffer, sprite edits are always made to the
   // second buffer. when ad is low, second buffer is copied over to main
+  // TODO: if we support 128x64, this gets pretty big, so maybe reimplement
+  // as BRAM
   logic [2047:0] main_buffer;
   logic [2047:0] second_buffer;
 
