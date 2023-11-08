@@ -6,6 +6,10 @@ module top_level(
   input wire [15:0] sw, //all 16 input slide switches
   input wire [3:0] btn, //all four momentary button switches
   output logic [15:0] led, //16 green output LEDs (located right above switches)
+  output logic [3:0] ss0_an,//anode control for upper four digits of seven-seg display
+  output logic [3:0] ss1_an,//anode control for lower four digits of seven-seg display
+  output logic [6:0] ss0_c, //cathode controls for the segments of upper four digits
+  output logic [6:0] ss1_c, //cathod controls for the segments of lower four digits
   output logic [2:0] rgb0, //rgb led
   output logic [2:0] rgb1, //rgb led
   output logic [2:0] hdmi_tx_p, //hdmi output signals (positives) (blue, green, red)
@@ -49,7 +53,8 @@ module top_level(
   logic btn_held;
   logic btn_pulse;
   logic prev_btn_held;
-  debouncer btn1_db(.clk_in(clk_100mhz),
+  debouncer btn1_db(
+      .clk_in(clk_100mhz),
       .rst_in(sys_rst),
       .dirty_in(btn[1]),
       .clean_out(btn_held)
@@ -100,10 +105,10 @@ module top_level(
       //.hdmi_data_out()
     );
 
-  chip8_input keys (
-      .clk_in(clk_100mhz),
-      .rst_in(sys_rst)
-    );
+  //chip8_input keys (
+  //    .clk_in(clk_100mhz),
+  //    .rst_in(sys_rst)
+  //  );
 
   chip8_processor processor (
       .clk_in(clk_100mhz),
@@ -148,6 +153,16 @@ module top_level(
   //  );
 
   // DEBUG stuff
+  logic [6:0] ss_c;
+  seven_segment_controller ssc(
+      .clk_in(clk_pixel), // TODO: i can't use clk_100mhz here, no idea why
+      .rst_in(sys_rst),
+      .val_in(32'hDEADBEEF),
+      .cat_out(ss_c),
+      .an_out({ss0_an, ss1_an})
+    );
+  assign ss0_c = ss_c;
+  assign ss1_c = ss_c;
 
   // HDMI stuff
 
