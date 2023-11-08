@@ -17,6 +17,7 @@ module chip8_memory #(
     parameter int WIDTH = 8
 ) (
     input wire clk_in,
+    input wire hdmi_clk_in,
     input wire rst_in,
 
     // indicates whether to copy a program from the library
@@ -201,7 +202,7 @@ module chip8_memory #(
 
       // hdmi fetch
       .addrb(),
-      .clkb(clk_in),
+      .clkb(hdmi_clk_in),
       .web(1'b0), // write-enable (hdmi should never write to ram)
       .dinb(1'b0), // read only, so unnecessary
       .enb(1'b1), // set to 0 to save power

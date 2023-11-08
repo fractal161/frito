@@ -267,7 +267,7 @@ module chip8_processor(
             end
             LD_IMM: begin // 6xkk
               // set Vx to kk
-              if (reg_ready_in)begin
+              if (mem_ready_in)begin
                 mem_addr_out <= 5'(opcode[11:8]);
                 mem_we_out <= 1;
                 mem_valid_out <= 1;
@@ -308,7 +308,7 @@ module chip8_processor(
               // set I to nnn
               case (substate)
                 0: begin
-                  if (reg_ready_in)begin
+                  if (mem_ready_in)begin
                     mem_addr_out <= 16; // Ih
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
@@ -320,7 +320,7 @@ module chip8_processor(
                   end
                 end
                 1: begin
-                  if (reg_ready_in)begin
+                  if (mem_ready_in)begin
                     mem_addr_out <= 17; // Ih
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
@@ -354,7 +354,7 @@ module chip8_processor(
           // write updated pc to bram
           case (substate)
             0: begin // write high byte
-              if (reg_ready_in)begin
+              if (mem_ready_in)begin
                 mem_addr_out <= 18; // pc high
                 mem_we_out <= 1;
                 mem_valid_out <= 1;
@@ -366,7 +366,7 @@ module chip8_processor(
               end
             end
             1: begin
-              if (reg_ready_in)begin
+              if (mem_ready_in)begin
                 mem_addr_out <= 19; // pc low
                 mem_we_out <= 1;
                 mem_valid_out <= 1;

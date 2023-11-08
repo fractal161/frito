@@ -74,6 +74,7 @@ module top_level(
   // TODO: fill out params as needed
   chip8_memory mem (
       .clk_in(clk_100mhz),
+      .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
 
       .proc_addr_in(proc_mem_addr),
@@ -94,7 +95,7 @@ module top_level(
       .video_ready_out(),
       .proc_valid_out(proc_mem_valid_res),
       .video_valid_out(),
-      .data_out(mem_data),
+      .data_out(mem_data)
 
       //.hdmi_data_out()
     );
@@ -110,7 +111,7 @@ module top_level(
 
       .chip8_clk_in(chip8_clk),
 
-      .active_in(active_in),
+      .active_in(1'b1), // TODO: replace
       //.timer_decr_in(),
 
       //.any_key_in(),
@@ -127,7 +128,7 @@ module top_level(
       .mem_we_out(proc_mem_we),
       .mem_valid_out(proc_mem_valid_req),
       .mem_data_out(proc_mem_data),
-      .mem_type_out(proc_mem_type),
+      .mem_type_out(proc_mem_type)
 
       //.sprite_addr_out(),
       //.sprite_pos_out(),
@@ -145,6 +146,8 @@ module top_level(
   //    .clk_in(clk_100mhz),
   //    .rst_in(sys_rst),
   //  );
+
+  // DEBUG stuff
 
   // HDMI stuff
 
@@ -178,6 +181,8 @@ module top_level(
       .nf_out(new_frame),
       .fc_out(frame_count)
     );
+
+  // TODO: put multiplexer here
 
   logic [7:0] red, green, blue; //red green and blue pixel values for output
 
