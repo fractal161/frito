@@ -23,22 +23,18 @@ module chip8_processor(
     input wire [7:0] mem_data_in,
 
     // receive instruction/data from memory
-    input wire ram_ready_in,
-    input wire ram_valid_in,
+    input wire mem_ready_in,
+    input wire mem_valid_in,
 
     // for asking input module for key
     output logic [4:0] req_key_out,
 
     // common params for querying memory
+    output logic [11:0] mem_addr_out,
     output logic mem_we_out,
     output logic mem_valid_out,
-    output logic mem_data_out,
-    output logic mem_type_out,
-
-    // specific addresses
-    output logic [11:0] ram_addr_out,
-    output logic [4:0] reg_addr_out,
-    output logic [4:0] stk_addr_out,
+    output logic [7:0] mem_data_out,
+    output logic [1:0] mem_type_out,
 
     // sprite drawing info
     output logic [11:0] sprite_addr_out,
@@ -55,6 +51,7 @@ module chip8_processor(
   localparam int IDLE = 0;
   localparam int FETCH = 1;
   localparam int EXECUTE = 2;
+  localparam int FINISH = 3;
 
   logic [1:0] state;
   // tracks different steps within each main state
@@ -105,6 +102,11 @@ module chip8_processor(
   // error codes
   localparam int ERR_PARSE = 1;
   localparam int ERR_STATE = 2;
+  localparam int ERR_EXEC = 3;
+
+  // utility variable to keep track of when the mem module has respond
+  logic mem_received;
+  logic mem_sent;
 
   // registers (TODO: delete because we do everything through bram now)
   //logic [8:0] vregs [16]; // registers V0 through V15/VF
@@ -119,11 +121,14 @@ module chip8_processor(
     // main logic
     if (rst_in)begin
       state <= IDLE;
+      substate <= 0;
       //pc <= 16'h200;
       //sp <= 0;
-      delay_timer <= 0;
-      sound_timer <= 0;
+      //delay_timer <= 0;
+      //sound_timer <= 0;
       error_out <= 0;
+      mem_received <= 0;
+      mem_sent <= 0;
     end else if (active_in)begin
       // main state machine goes here. states are as follows:
       // - idle (wait until chip8_clk_in)
@@ -131,52 +136,90 @@ module chip8_processor(
       // - execute (massive switch statement for each instruction,
       //     i think variable length execution is fine because most of the
       //     time will be spent in idle anyways)
-      // TODO: be better about pipelining into memory
+      // TODO: make all memory fetches use ram_ready_in
       case (state)
         IDLE: begin
           if (chip8_clk_in)begin
-            reg_addr_out <= 18; // fetch pc high
-            reg_valid_out <= 1;
             state <= FETCH;
             substate <= 0;
-            fetch_state <= 0;
+            mem_received <= 0;
+            mem_sent <= 0;
           end else begin
             mem_valid_out <= 0;
           end
         end
         FETCH: begin
+          // TODO: optimize optimize optimize
           case (substate)
-            0: begin // fetching high pc byte, fetch pc low
+            0: begin // fetch pc high
+              if (mem_ready_in)begin // fetch high pc
+                mem_addr_out <= 18; // pc high
+                mem_we_out <= 0;
+                mem_valid_out <= 1;
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_received <= 0;
+                mem_sent <= 0;
+                substate <= substate + 1;
+              end
+            end
+            1: begin // wait for pc high, fetch pc low
+              if (mem_ready_in)begin
+                mem_addr_out <= 19; // pc low
+                mem_we_out <= 0;
+                mem_valid_out <= 1;
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_sent <= 1;
+              end else begin
+                mem_valid_out <= 0;
+              end
+
               if (mem_valid_in)begin
                 pc[11:8] <= mem_data_in[3:0];
-                reg_addr_out <= 19; // fetch pc low
-                mem_valid_out <= 1;
-                substate <= substate + 1;
-              end else begin
-                mem_valid_out <= 0;
+                mem_received <= 1;
+              end
+              // if both actions have completed, proceed
+              if ((mem_valid_in|mem_received) && (mem_ready_in|mem_sent))begin
+                substate <= substate+1;
               end
             end
-            1: begin // fetching low pc byte
+            2: begin // wait for pc low, then fetch opcode high
               if (mem_valid_in)begin
-                pc[7:0] <= mem_data_in;
-                mem_addr_out <= {pc[11:8], mem_data_in}; // first opcode byte
+                mem_addr_out <= {pc[11:8], mem_data_in}; // opcode high
+                mem_we_out <= 0;
                 mem_valid_out <= 1;
+                mem_type_out <= PROC_MEM_TYPE_RAM;
+
+                mem_received <= 0;
+                mem_sent <= 0;
                 substate <= substate + 1;
               end else begin
                 mem_valid_out <= 0;
               end
             end
-            2: begin // waiting for first opcode byte (big endian)
+            3: begin // wait for opcode high, fetch opcode low
+              if (mem_ready_in)begin
+                mem_addr_out <= pc + 1; // opcode low
+                mem_we_out <= 0;
+                mem_valid_out <= 1;
+                mem_type_out <= PROC_MEM_TYPE_RAM;
+                mem_sent <= 1;
+                // now that opcode has been fully requested, increment pc here
+                pc <= pc + 2;
+              end else begin
+                mem_valid_out <= 0;
+              end
+
               if (mem_valid_in)begin
                 opcode[15:8] <= mem_data_in;
-                mem_addr_out <= pc[11:0] + 1; // second opcode byte
-                mem_valid_out <= 1;
-                substate <= substate + 1;
-              end else begin
-                mem_valid_out <= 0;
+                mem_received <= 1;
+              end
+              if ((mem_valid_in|mem_received) && (mem_ready_in|mem_sent))begin
+                mem_received <= 0;
+                mem_sent <= 0;
+                substate <= substate+1;
               end
             end
-            3: begin // waiting for second opcode byte
+            4: begin // wait for opcode low
               mem_valid_out <= 0;
               if (mem_valid_in)begin
                 opcode[7:0] <= mem_data_in;
@@ -185,7 +228,7 @@ module chip8_processor(
                 case (opcode[15:12])
                   4'h0: begin
                     // TODO: handle RET
-                    if (opcode[11:8] == 4'h0 && mem_data_in == 8'hE0)begin
+                    if ({opcode[11:8], mem_data_in} == 8'h0E0)begin
                       instr <= CLS;
                     end else begin
                       error_out <= 1;
@@ -212,27 +255,132 @@ module chip8_processor(
           // TODO: 00E0, 1nnn, 6xkk, 7xkk, Annn, Dxyn
           case (instr)
             CLS: begin // 00E0
-              // set all pixels to 0
+              // set all pixels to 0 (TODO: actually implement)
+              state <= FINISH;
+              substate <= 0;
             end
             JP_ABS: begin // 1nnn
               // set pc to nnn
+              pc <= opcode[11:0];
+              state <= FINISH;
+              substate <= 0;
             end
-            LD_IMM: begin // 6xnn
+            LD_IMM: begin // 6xkk
               // set Vx to kk
+              if (reg_ready_in)begin
+                mem_addr_out <= 5'(opcode[11:8]);
+                mem_we_out <= 1;
+                mem_valid_out <= 1;
+                mem_data_out <= opcode[7:0];
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                state <= FINISH;
+                substate <= 0;
+              end
             end
-            ADD_IMM: begin // 7xnn
+            ADD_IMM: begin // 7xkk
               // set Vx to Vx + kk
+              case (substate)
+                0: begin // fetch Vx
+                  mem_addr_out <= 5'(opcode[11:8]);
+                  mem_we_out <= 0;
+                  mem_valid_out <= 1;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  substate <= substate + 1;
+                end
+                1: begin // write Vx + kk
+                  if (mem_valid_in)begin
+                    mem_addr_out <= 5'(opcode[11:8]);
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= mem_data_in + opcode[7:0];
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_I: begin // Annn
               // set I to nnn
+              case (substate)
+                0: begin
+                  if (reg_ready_in)begin
+                    mem_addr_out <= 16; // Ih
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= 8'(opcode[11:8]);
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin
+                  if (reg_ready_in)begin
+                    mem_addr_out <= 17; // Ih
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= opcode[7:0];
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             DRW: begin // Dxyn
               // display n-byte sprite defined at memory location I
               // beginning at pixel (Vx, Vy)
               // if collision, set VF to 1
+              // TODO: actually implement
+              state <= FINISH;
+              substate <= 0;
             end
             default: begin
               error_out <= ERR_PARSE;
+            end
+          endcase
+        end
+        FINISH: begin
+          // write updated pc to bram
+          case (substate)
+            0: begin // write high byte
+              if (reg_ready_in)begin
+                mem_addr_out <= 18; // pc high
+                mem_we_out <= 1;
+                mem_valid_out <= 1;
+                mem_data_out <= pc[15:8];
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                substate <= substate + 1;
+              end else begin
+                mem_valid_out <= 0;
+              end
+            end
+            1: begin
+              if (reg_ready_in)begin
+                mem_addr_out <= 19; // pc low
+                mem_we_out <= 1;
+                mem_valid_out <= 1;
+                mem_data_out <= pc[7:0];
+                mem_type_out <= PROC_MEM_TYPE_REG;
+
+                state <= IDLE;
+                substate <= 0;
+              end else begin
+                mem_valid_out <= 0;
+              end
+            end
+            default: begin
+              error_out <= ERR_STATE;
             end
           endcase
         end
@@ -243,13 +391,13 @@ module chip8_processor(
     end
   end
   // handle timers independently
-  always_ff @(posedge clk_in)begin
-    if (timer_decr_in)begin
-      delay_timer <= delay_timer == 0 ? 0 : delay_timer - 1;
-      sound_timer <= sound_timer == 0 ? 0 : sound_timer - 1;
-    end
-  end
-  assign active_audio_out = sound_timer > 0;
+  //always_ff @(posedge clk_in)begin
+  //  if (timer_decr_in)begin
+  //    delay_timer <= delay_timer == 0 ? 0 : delay_timer - 1;
+  //    sound_timer <= sound_timer == 0 ? 0 : sound_timer - 1;
+  //  end
+  //end
+  //assign active_audio_out = sound_timer > 0;
 
 endmodule // processor
 

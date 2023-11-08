@@ -36,6 +36,7 @@ module chip8_memory #(
     input wire video_we_in,
     input wire video_valid_in,
     input wire [WIDTH-1:0] video_data_in,
+    input wire [0:0] video_type_in,
 
     // flash rom (TODO: add)
 
@@ -185,7 +186,7 @@ module chip8_memory #(
   end
 
   xilinx_true_dual_port_read_first_2_clock_ram #(
-      .RAM_WIDTH(16),
+      .RAM_WIDTH(WIDTH),
       .RAM_DEPTH(DEPTH)
     ) memory (
       // TODO: assign properly
