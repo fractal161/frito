@@ -40,7 +40,7 @@ module chip8_memory #(
     // flash rom (TODO: add)
 
     // get value for hdmi module
-    input [15:0] hdmi_addr_in,
+    input wire [15:0] hdmi_addr_in,
 
     // readies for each pattern
     output logic proc_ready_out,
@@ -94,7 +94,7 @@ module chip8_memory #(
   logic [$clog2(DEPTH)-1:0] hdmi_addr;
 
   // output is the type of state (TODO: tweak depth???)
-  pipeline #(.WIDTH(STATE_WIDTH), .DEPTH(2)) state(
+  pipeline #(.WIDTH(STATE_WIDTH), .DEPTH(2)) state_pipeline(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(state),
@@ -106,6 +106,11 @@ module chip8_memory #(
   logic proc_we;
   logic [WIDTH-1:0] proc_data;
   logic [1:0] proc_type;
+
+  logic [11:0] video_addr;
+  logic video_we;
+  logic [WIDTH-1:0] video_data;
+  logic [1:0] video_type;
 
   always_ff @(posedge clk_in)begin
     if (rst_in)begin
@@ -157,7 +162,7 @@ module chip8_memory #(
           endcase
         end
       end else if (video_ready_out && video_valid_in)begin
-        if (!proc_read_out || proc_valid_in)begin
+        if (!proc_ready_out || proc_valid_in)begin
           // stash
           video_we <= video_we_in;
           video_data <= video_data_in;
