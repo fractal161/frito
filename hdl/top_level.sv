@@ -24,11 +24,118 @@ module top_level(
   logic clk_pixel, clk_5x; //clock lines
   logic locked; //locked signal (we'll leave unused but still hook it up)
 
+  // chip-8 stuff! (TODO: fill out)
+
+  localparam int CHIP8_CLK_RATIO = 200000;
+  // inline clock for simplicity
+  logic chip8_clk_in;
+  logic [17:0] chip8_clk_ctr;
+  // actual counter
+  //always_ff @(posedge clk_100mhz)begin
+  //  if (rst_in)begin
+  //    chip8_clk_in <= 0;
+  //    chip8_clk_ctr <= 0;
+  //  end else begin
+  //    if (chip8_clk_ctr == CHIP8_CLK_RATIO-1) begin
+  //      chip8_clk_in <= 1;
+  //      chip8_clk_ctr <= 0;
+  //    end else begin
+  //      chip8_clk_in <= 0;
+  //      chip8_clk_ctr <= chip8_clk_ctr+1;
+  //    end
+  //  end
+  //end
+  // debug clock, for testing. btn[1] advances by a cycle
+  always_ff @(posedge clk_100mhz)begin
+  end
+
+  logic [7:0] mem_data;
+
+  logic [11:0] proc_mem_addr;
+  logic proc_mem_we;
+  logic proc_mem_valid_req;
+  logic [7:0] proc_mem_data;
+  logic [1:0] proc_mem_type;
+
+  logic proc_mem_ready;
+  logic proc_mem_valid_res;
+
   // TODO: fill out params as needed
-  chip8 chip8 (
+  chip8_memory mem (
+      .clk_in(clk_100mhz),
+      .rst_in(sys_rst),
+
+      .proc_addr_in(proc_mem_addr),
+      .proc_we_in(proc_mem_we),
+      .proc_valid_in(proc_mem_valid_req),
+      .proc_data_in(proc_mem_data),
+      .proc_type_in(proc_mem_type),
+
+      //.video_addr_in(),
+      //.video_we_in(),
+      //.video_valid_in(),
+      //.video_data_in(),
+      //.video_type_in(),
+
+      //.hdmi_addr_in(),
+
+      .proc_ready_out(proc_mem_ready),
+      .video_ready_out(),
+      .proc_valid_out(proc_mem_valid_res),
+      .video_valid_out(),
+      .data_out(mem_data),
+
+      //.hdmi_data_out()
+    );
+
+  chip8_input keys (
       .clk_in(clk_100mhz),
       .rst_in(sys_rst)
     );
+
+  chip8_processor processor (
+      .clk_in(clk_100mhz),
+      .rst_in(sys_rst),
+
+      .chip8_clk_in(chip8_clk_in),
+
+      .active_in(active_in),
+      //.timer_decr_in(),
+
+      //.any_key_in(),
+      //.valid_key_in(),
+      //.req_key_state_in(),
+
+      .mem_ready_in(proc_mem_ready),
+      .mem_valid_in(proc_mem_valid_res),
+      .mem_data_in(mem_data),
+
+      //.req_key_out(),
+
+      .mem_addr_out(proc_mem_addr),
+      .mem_we_out(proc_mem_we),
+      .mem_valid_out(proc_mem_valid_req),
+      .mem_data_out(proc_mem_data),
+      .mem_type_out(proc_mem_type),
+
+      //.sprite_addr_out(),
+      //.sprite_pos_out(),
+      //.active_audio_out(),
+      //.error_out()
+    );
+
+  //chip8_audio audio (
+  //    .clk_in(clk_100mhz),
+  //    .rst_in(sys_rst)
+  //  );
+
+
+  //chip8_video video (
+  //    .clk_in(clk_100mhz),
+  //    .rst_in(sys_rst),
+  //  );
+
+  // HDMI stuff
 
   //clock manager...creates 74.25 Hz and 5 times 74.25 MHz for pixel and TMDS
   hdmi_clk_wiz_720p mhdmicw (
