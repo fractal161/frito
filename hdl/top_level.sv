@@ -28,6 +28,10 @@ module top_level(
   logic clk_pixel, clk_5x; //clock lines
   logic locked; //locked signal (we'll leave unused but still hook it up)
 
+  logic clk_100mhz_buf;
+
+  BUFG mbf (.I(clk_100mhz), .O(clk_100mhz_buf));
+
   // chip-8 stuff! (TODO: fill out)
 
   localparam int CHIP8_CLK_RATIO = 200000;
@@ -35,7 +39,7 @@ module top_level(
   logic chip8_clk;
   logic [17:0] chip8_clk_ctr;
   // actual counter
-  //always_ff @(posedge clk_100mhz)begin
+  //always_ff @(posedge clk_100mhz_buf)begin
   //  if (rst_in)begin
   //    chip8_clk <= 0;
   //    chip8_clk_ctr <= 0;
@@ -54,12 +58,12 @@ module top_level(
   logic btn_pulse;
   logic prev_btn_held;
   debouncer btn1_db(
-      .clk_in(clk_100mhz),
+      .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
       .dirty_in(btn[1]),
       .clean_out(btn_held)
     );
-  always_ff @(posedge clk_100mhz)begin
+  always_ff @(posedge clk_100mhz_buf)begin
     btn_pulse <= btn_held & !prev_btn_held;
     prev_btn_held <= btn_held;
   end
@@ -78,7 +82,7 @@ module top_level(
 
   // TODO: fill out params as needed
   chip8_memory mem (
-      .clk_in(clk_100mhz),
+      .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
 
@@ -106,12 +110,12 @@ module top_level(
     );
 
   //chip8_input keys (
-  //    .clk_in(clk_100mhz),
+  //    .clk_in(clk_100mhz_buf),
   //    .rst_in(sys_rst)
   //  );
 
   chip8_processor processor (
-      .clk_in(clk_100mhz),
+      .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
 
       .chip8_clk_in(chip8_clk),
@@ -142,20 +146,20 @@ module top_level(
     );
 
   //chip8_audio audio (
-  //    .clk_in(clk_100mhz),
+  //    .clk_in(clk_100mhz_buf),
   //    .rst_in(sys_rst)
   //  );
 
 
   //chip8_video video (
-  //    .clk_in(clk_100mhz),
+  //    .clk_in(clk_100mhz_buf),
   //    .rst_in(sys_rst),
   //  );
 
   // DEBUG stuff
   logic [6:0] ss_c;
   seven_segment_controller ssc(
-      .clk_in(clk_pixel), // TODO: i can't use clk_100mhz here, no idea why
+      .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
       .val_in(32'hDEADBEEF),
       .cat_out(ss_c),
@@ -170,7 +174,7 @@ module top_level(
   hdmi_clk_wiz_720p mhdmicw (
       .reset(0),
       .locked(locked),
-      .clk_ref(clk_100mhz),
+      .clk_ref(clk_100mhz_buf),
       .clk_pixel(clk_pixel),
       .clk_tmds(clk_5x)
     );
