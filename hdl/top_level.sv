@@ -28,26 +28,37 @@ module top_level(
 
   localparam int CHIP8_CLK_RATIO = 200000;
   // inline clock for simplicity
-  logic chip8_clk_in;
+  logic chip8_clk;
   logic [17:0] chip8_clk_ctr;
   // actual counter
   //always_ff @(posedge clk_100mhz)begin
   //  if (rst_in)begin
-  //    chip8_clk_in <= 0;
+  //    chip8_clk <= 0;
   //    chip8_clk_ctr <= 0;
   //  end else begin
   //    if (chip8_clk_ctr == CHIP8_CLK_RATIO-1) begin
-  //      chip8_clk_in <= 1;
+  //      chip8_clk <= 1;
   //      chip8_clk_ctr <= 0;
   //    end else begin
-  //      chip8_clk_in <= 0;
+  //      chip8_clk <= 0;
   //      chip8_clk_ctr <= chip8_clk_ctr+1;
   //    end
   //  end
   //end
   // debug clock, for testing. btn[1] advances by a cycle
+  logic btn_held;
+  logic btn_pulse;
+  logic prev_btn_held;
+  debouncer btn1_db(.clk_in(clk_100mhz),
+      .rst_in(sys_rst),
+      .dirty_in(btn[1]),
+      .clean_out(btn_held)
+    );
   always_ff @(posedge clk_100mhz)begin
+    btn_pulse <= btn_held & !prev_btn_held;
+    prev_btn_held <= btn_held;
   end
+  assign chip8_clk = btn_pulse;
 
   logic [7:0] mem_data;
 
@@ -97,7 +108,7 @@ module top_level(
       .clk_in(clk_100mhz),
       .rst_in(sys_rst),
 
-      .chip8_clk_in(chip8_clk_in),
+      .chip8_clk_in(chip8_clk),
 
       .active_in(active_in),
       //.timer_decr_in(),
