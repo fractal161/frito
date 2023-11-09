@@ -34,7 +34,9 @@ module chip8_video(
     output logic mem_we,
     output logic mem_valid_out,
     output logic [7:0] mem_data_out,
-    output logic mem_type_out // 0 for RAM (sprite), 1 for VRAM
+    output logic mem_type_out, // 0 for RAM (sprite), 1 for VRAM
+
+    output logic collision
   );
 
   localparam WIDTH = 64;
@@ -85,6 +87,7 @@ module chip8_video(
           draw_offset <= 0;
           drawing_state <= 0;
           updating_line <= 0;
+          collision <= 0;
           mem_valid_out <= 0;
         end
 
@@ -118,9 +121,10 @@ module chip8_video(
             3: begin // recieve left buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
+                collision <= collision || (|(updating_line[15:8] & mem_data_in));
+
                 updating_line[15:8] <= updating_line[15:8] ^ mem_data_in; // XOR!
                 drawing_state <= drawing_state + 1;
-                // TODO: Collisions
               end
             end
             4: begin // request right buffer byte
@@ -135,9 +139,10 @@ module chip8_video(
             5: begin // recieve right buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
+                collision <= collision || (|(updating_line[7:0] & mem_data_in));
+
                 updating_line[7:0] <= updating_line[7:0] ^ mem_data_in; // XOR!
                 drawing_state <= drawing_state + 1;
-                // TODO: Collisions
               end
             end
             6: begin // write left buffer byte
