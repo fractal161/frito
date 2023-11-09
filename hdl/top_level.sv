@@ -1,6 +1,12 @@
 `timescale 1ns / 1ps
 `default_nettype none // prevents system from inferring an undeclared logic (good practice)
 
+`ifdef SYNTHESIS
+`define FPATH(X) `"X`"
+`else /* ! SYNTHESIS */
+`define FPATH(X) `"data/X`"
+`endif  /* ! SYNTHESIS */
+
 module top_level(
   input wire clk_100mhz, //crystal reference clock
   input wire [15:0] sw, //all 16 input slide switches
@@ -17,7 +23,20 @@ module top_level(
   output logic hdmi_clk_p, hdmi_clk_n //differential hdmi clock
   );
 
-  assign led = sw; //to verify the switch values
+  // TODO: this should be in chip8_params why is it not imported here
+  localparam int PROC_MEM_TYPE_RAM = 0;
+  localparam int PROC_MEM_TYPE_REG = 1;
+  localparam int PROC_MEM_TYPE_STK = 2;
+  localparam int PROC_MEM_TYPE_COUNT = 3;
+
+  localparam int DEBUG_MEM_TYPE_RAM = 0;
+  localparam int DEBUG_MEM_TYPE_VRAM = 1;
+  localparam int DEBUG_MEM_TYPE_REG = 2;
+  localparam int DEBUG_MEM_TYPE_STK = 3;
+  localparam int DEBUG_MEM_TYPE_COUNT = 4;
+
+  // assign led = sw; //to verify the switch values
+
   //shut up those rgb LEDs (active high):
   assign rgb1 = 0;
   assign rgb0 = 0;
@@ -34,13 +53,13 @@ module top_level(
 
   // chip-8 stuff! (TODO: fill out)
 
-  localparam int CHIP8_CLK_RATIO = 200000;
+  localparam int CHIP8_CLK_RATIO = 200_000;
   // inline clock for simplicity
   logic chip8_clk;
   logic [17:0] chip8_clk_ctr;
   // actual counter
   //always_ff @(posedge clk_100mhz_buf)begin
-  //  if (rst_in)begin
+  //  if (sys_rst)begin
   //    chip8_clk <= 0;
   //    chip8_clk_ctr <= 0;
   //  end else begin
@@ -75,13 +94,22 @@ module top_level(
   logic proc_mem_we;
   logic proc_mem_valid_req;
   logic [7:0] proc_mem_data;
-  logic [1:0] proc_mem_type;
+  logic [$clog2(PROC_MEM_TYPE_COUNT)-1:0] proc_mem_type;
 
   logic proc_mem_ready;
   logic proc_mem_valid_res;
 
+  logic [11:0] debug_mem_addr;
+  logic debug_mem_we;
+  logic debug_mem_valid_req;
+  logic [7:0] debug_mem_data;
+  logic [$clog2(DEBUG_MEM_TYPE_COUNT)-1:0] debug_mem_type;
+
+  logic debug_mem_ready;
+  logic debug_mem_valid_res;
+
   // TODO: fill out params as needed
-  chip8_memory mem (
+  chip8_memory #(.FILE(`FPATH(ibm.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
@@ -94,16 +122,27 @@ module top_level(
 
       //.video_addr_in(),
       //.video_we_in(),
-      //.video_valid_in(),
+      .video_valid_in(1'b0),
       //.video_data_in(),
       //.video_type_in(),
+
+      .debug_addr_in(debug_mem_addr),
+      .debug_we_in(debug_mem_we),
+      .debug_valid_in(debug_mem_valid_req),
+      .debug_data_in(debug_mem_data),
+      .debug_type_in(debug_mem_type),
 
       //.hdmi_addr_in(),
 
       .proc_ready_out(proc_mem_ready),
-      .video_ready_out(),
       .proc_valid_out(proc_mem_valid_res),
-      .video_valid_out(),
+
+      //.video_ready_out(),
+      //.video_valid_out(),
+
+      .debug_ready_out(debug_mem_ready),
+      .debug_valid_out(debug_mem_valid_res),
+
       .data_out(mem_data)
 
       //.hdmi_data_out()
@@ -157,11 +196,44 @@ module top_level(
   //  );
 
   // DEBUG stuff
+
+  logic debug_ff;
+
+  assign led[0] = debug_ff;
+
+  localparam int DEBUG_CLK_RATIO = 1_000_000;
+  logic [27:0] debug_clk_ctr;
+  logic [31:0] debug_data;
+  always_ff @(posedge clk_100mhz_buf)begin
+    if (sys_rst)begin
+      debug_data <= 0;
+      debug_clk_ctr <= 0;
+    end else begin
+      if (debug_clk_ctr == DEBUG_CLK_RATIO-1) begin
+        debug_clk_ctr <= 0;
+        if (debug_mem_ready)begin
+          debug_mem_addr <= sw[11:0];
+          debug_mem_we <= 0;
+          debug_mem_valid_req <= 1;
+          debug_mem_type <= sw[15:16-$clog2(DEBUG_MEM_TYPE_COUNT)];
+        end else begin
+          debug_mem_valid_req <= 0;
+        end
+      end else begin
+        debug_mem_valid_req <= 0;
+        debug_clk_ctr <= debug_clk_ctr+1;
+      end
+      if (debug_mem_valid_res)begin
+        debug_data <= mem_data;
+      end
+    end
+  end
+
   logic [6:0] ss_c;
   seven_segment_controller ssc(
       .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
-      .val_in(32'hDEADBEEF),
+      .val_in(debug_data),
       .cat_out(ss_c),
       .an_out({ss0_an, ss1_an})
     );

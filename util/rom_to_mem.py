@@ -14,5 +14,6 @@ if __name__ == '__main__':
         byte_list.extend('00' for _ in range(0x1000 - len(byte_list) + 0x100 + 18))
         # pc
         byte_list.extend(('02', '00'))
+        byte_list.extend('00' for _ in range(4407 - len(byte_list)))
         with open(sys.argv[2], 'w') as f:
-            f.write(' '.join(byte_list))
+            f.write('\n'.join(byte_list))

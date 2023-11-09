@@ -34,7 +34,7 @@ module chip8_processor(
     output logic mem_we_out,
     output logic mem_valid_out,
     output logic [7:0] mem_data_out,
-    output logic [1:0] mem_type_out,
+    output logic [$clog2(PROC_MEM_TYPE_COUNT)-1:0] mem_type_out,
 
     // sprite drawing info
     output logic [11:0] sprite_addr_out,
