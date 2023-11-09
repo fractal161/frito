@@ -122,7 +122,7 @@ module chip8_processor(
     if (rst_in)begin
       state <= IDLE;
       substate <= 0;
-      //pc <= 16'h200;
+      pc <= 16'h0;
       //sp <= 0;
       //delay_timer <= 0;
       //sound_timer <= 0;
@@ -163,7 +163,7 @@ module chip8_processor(
               end
             end
             1: begin // wait for pc high, fetch pc low
-              if (mem_ready_in)begin
+              if (!mem_sent && mem_ready_in)begin
                 mem_addr_out <= 19; // pc low
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
@@ -184,6 +184,7 @@ module chip8_processor(
             end
             2: begin // wait for pc low, then fetch opcode high
               if (mem_valid_in)begin
+                pc[7:0] <= mem_data_in;
                 mem_addr_out <= {pc[11:8], mem_data_in}; // opcode high
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
@@ -197,7 +198,7 @@ module chip8_processor(
               end
             end
             3: begin // wait for opcode high, fetch opcode low
-              if (mem_ready_in)begin
+              if (!mem_sent && mem_ready_in)begin
                 mem_addr_out <= pc + 1; // opcode low
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
