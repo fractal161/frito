@@ -295,7 +295,8 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in + opcode[7:0];
                     mem_type_out <= PROC_MEM_TYPE_REG;
-                    substate <= substate + 1;
+                    state <= FINISH;
+                    substate <= 0;
                   end else begin
                     mem_valid_out <= 0;
                   end

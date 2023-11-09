@@ -16,6 +16,7 @@
 
 // Internally, memory is stored in a BRAM of width 8
 
+// TODO: proper reset handling
 // TODO: optimize this later. For example, only one of proc_ram, proc_reg, and
 // proc_stk will ever be requested at a time, so can probably optimize cycles
 // here

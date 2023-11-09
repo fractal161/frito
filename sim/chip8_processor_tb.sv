@@ -90,6 +90,18 @@ module chip8_processor_tb;
     #10;
     chip8_clk_in = 0;
     #500;
+    chip8_clk_in = 1;
+    #10;
+    chip8_clk_in = 0;
+    #500;
+    chip8_clk_in = 1;
+    #10;
+    chip8_clk_in = 0;
+    #500;
+    chip8_clk_in = 1;
+    #10;
+    chip8_clk_in = 0;
+    #500;
     $display("Simulation complete!");
     $finish;
   end
