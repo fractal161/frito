@@ -108,6 +108,9 @@ module top_level(
   logic debug_mem_ready;
   logic debug_mem_valid_res;
 
+  logic [15:0] hdmi_addr;
+  logic [7:0] hdmi_mem_data;
+
   // TODO: fill out params as needed
   chip8_memory #(.FILE(`FPATH(ibm.mem))) mem(
       .clk_in(clk_100mhz_buf),
@@ -132,7 +135,7 @@ module top_level(
       .debug_data_in(debug_mem_data),
       .debug_type_in(debug_mem_type),
 
-      //.hdmi_addr_in(),
+      .hdmi_addr_in(hdmi_addr),
 
       .proc_ready_out(proc_mem_ready),
       .proc_valid_out(proc_mem_valid_res),
@@ -143,9 +146,9 @@ module top_level(
       .debug_ready_out(debug_mem_ready),
       .debug_valid_out(debug_mem_valid_res),
 
-      .data_out(mem_data)
+      .data_out(mem_data),
 
-      //.hdmi_data_out()
+      .hdmi_data_out(hdmi_mem_data)
     );
 
   //chip8_input keys (
@@ -273,16 +276,35 @@ module top_level(
       .fc_out(frame_count)
     );
 
-  // TODO: put multiplexer here
+  logic hdmi_pixel_out;
+  video_multiplexer multiplexer1(
+      .clk_in(clk_pixel),
+      .rst_in(sys_rst),
+      .hcount_in(hcount),
+      .vcount_in(vcount),
+      .hdmi_data_in(hdmi_mem_data),
+      .hdmi_addr_out(hdmi_addr),
+      .hdmi_pixel_out(hdmi_pixel_out)
+    );
+
+  // pipeline active_draw, hor_sync, vert_sync by 2 cycles
+  logic active_draw_piped;
+  logic hor_sync_piped;
+  logic vert_sync_piped;
+
+  pipeline #(.WIDTH(3), .DEPTH(2)) video_signal_pipe(
+    .clk_in(clk_pixel),
+    .rst_in(rst_in),
+    .val_in({active_draw, hor_sync, vert_sync}),
+    .val_out({active_draw_piped, hor_sync_piped, vert_sync_piped})
+  );
 
   logic [7:0] red, green, blue; //red green and blue pixel values for output
 
-
-  // TODO: assign (red, green, blue) here, which gets fed to output
   always_comb begin
-    red = 8'h7F;
-    green = 8'hFF;
-    blue = 8'hD4;
+    red = hdmi_pixel_out ? 8'h7F : 8'h00;
+    green = hdmi_pixel_out ? 8'hFF : 8'h00;
+    blue = hdmi_pixel_out ? 8'hD4 : 8'h00;
   end
 
   logic [9:0] tmds_10b [0:2]; //output of each TMDS encoder!
@@ -294,7 +316,7 @@ module top_level(
       .rst_in(sys_rst),
       .data_in(red),
       .control_in(2'b0),
-      .ve_in(active_draw),
+      .ve_in(active_draw_piped),
       .tmds_out(tmds_10b[2])
     );
 
@@ -303,7 +325,7 @@ module top_level(
       .rst_in(sys_rst),
       .data_in(green),
       .control_in(2'b0),
-      .ve_in(active_draw),
+      .ve_in(active_draw_piped),
       .tmds_out(tmds_10b[1])
     );
 
@@ -311,8 +333,8 @@ module top_level(
       .clk_in(clk_pixel),
       .rst_in(sys_rst),
       .data_in(blue),
-      .control_in({vert_sync, hor_sync}),
-      .ve_in(active_draw),
+      .control_in({vert_sync_piped, hor_sync_piped}),
+      .ve_in(active_draw_piped),
       .tmds_out(tmds_10b[0])
     );
 

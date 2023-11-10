@@ -18,6 +18,7 @@ module chip8_video(
     output logic pixel_out,
 
     // sprite drawing info
+    input wire draw_sprite_in,
     input wire [15:0] sprite_addr_in,
     input wire [5:0] sprite_x_in,
     input wire [4:0] sprite_y_in,
@@ -36,7 +37,8 @@ module chip8_video(
     output logic [7:0] mem_data_out,
     output logic mem_type_out, // 0 for RAM (sprite), 1 for VRAM
 
-    output logic collision
+    output logic collision,
+    output logic done_drawing
   );
 
   localparam WIDTH = 64;
@@ -56,7 +58,7 @@ module chip8_video(
   logic [4:0] sprite_pos_y;
   logic [2:0] left_byte;
   logic [2:0] right_byte;
-  logic [3:0] right_offset;
+  logic [2:0] left_offset;
 
   logic [3:0] sprite_height;
 
@@ -68,13 +70,13 @@ module chip8_video(
     if (rst_in)begin
       state <= RESTING;
       mem_valid_out <= 0;
-    end else if (clear_buffer_in) begin
-      state <= CLEARING;
-      clear_pos <= 0;
     end else begin
       case (state)
         RESTING: begin
-          if (mem_valid_in) begin
+          if (clear_buffer_in) begin
+            state <= CLEARING;
+            clear_pos <= 0;
+          end else if (draw_sprite_in) begin
             sprite_addr <= sprite_addr_in;
             sprite_pos_x <= sprite_x_in;
             left_byte <= (sprite_x_in >> 3);
@@ -88,6 +90,7 @@ module chip8_video(
           drawing_state <= 0;
           updating_line <= 0;
           collision <= 0;
+          done_drawing <= 0;
           mem_valid_out <= 0;
         end
 
@@ -170,7 +173,8 @@ module chip8_video(
                   draw_offset <= draw_offset + 1;
                   drawing_state <= 0;
                 end else begin
-                  state <= RESTING
+                  done_drawing <= 1;
+                  state <= RESTING;
                 end
               end else begin
                 mem_valid_out <= 0;
@@ -196,6 +200,7 @@ module chip8_video(
           end else begin
             mem_valid_out <= 0;
           end
+          collision <= 0;
         end
       endcase
     end
