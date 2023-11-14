@@ -17,9 +17,9 @@ module video_multiplexer(
     // value of pixel requested for hdmi display
     // (colors can be inferred in top_level)
     output logic [15:0] hdmi_addr_out,
-    output logic hdmi_pixel_out,
+    output logic hdmi_pixel_out
   );
-  
+
   logic [5:0] chip8_x_out;
   logic [4:0] chip8_y_out;
   logic [2:0] chip8_x_byte;

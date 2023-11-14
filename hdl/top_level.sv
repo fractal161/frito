@@ -35,6 +35,10 @@ module top_level(
   localparam int DEBUG_MEM_TYPE_STK = 3;
   localparam int DEBUG_MEM_TYPE_COUNT = 4;
 
+  localparam int VIDEO_MEM_TYPE_RAM = 0;
+  localparam int VIDEO_MEM_TYPE_VRAM = 1;
+  localparam int VIDEO_MEM_TYPE_COUNT = 2;
+
   // assign led = sw; //to verify the switch values
 
   //shut up those rgb LEDs (active high):
@@ -99,6 +103,15 @@ module top_level(
   logic proc_mem_ready;
   logic proc_mem_valid_res;
 
+  logic [11:0] video_mem_addr;
+  logic video_mem_we;
+  logic video_mem_valid_req;
+  logic [7:0] video_mem_data;
+  logic [$clog2(VIDEO_MEM_TYPE_COUNT)-1:0] video_mem_type;
+
+  logic video_mem_ready;
+  logic video_mem_valid_res;
+
   logic [11:0] debug_mem_addr;
   logic debug_mem_we;
   logic debug_mem_valid_req;
@@ -107,6 +120,18 @@ module top_level(
 
   logic debug_mem_ready;
   logic debug_mem_valid_res;
+
+  logic video_draw_sprite;
+  logic [11:0] video_sprite_addr;
+  logic [5:0] video_sprite_x;
+  logic [4:0] video_sprite_y;
+  logic [3:0] video_sprite_height;
+
+  logic video_clear_buffer;
+
+  logic video_collision;
+  logic video_done_drawing;
+
 
   logic [15:0] hdmi_addr;
   logic [7:0] hdmi_mem_data;
@@ -123,11 +148,11 @@ module top_level(
       .proc_data_in(proc_mem_data),
       .proc_type_in(proc_mem_type),
 
-      //.video_addr_in(),
-      //.video_we_in(),
-      .video_valid_in(1'b0),
-      //.video_data_in(),
-      //.video_type_in(),
+      .video_addr_in(video_mem_addr),
+      .video_we_in(video_mem_we),
+      .video_valid_in(video_mem_valid_req),
+      .video_data_in(video_mem_data),
+      .video_type_in(video_mem_type),
 
       .debug_addr_in(debug_mem_addr),
       .debug_we_in(debug_mem_we),
@@ -140,8 +165,8 @@ module top_level(
       .proc_ready_out(proc_mem_ready),
       .proc_valid_out(proc_mem_valid_res),
 
-      //.video_ready_out(),
-      //.video_valid_out(),
+      .video_ready_out(video_mem_ready),
+      .video_valid_out(video_mem_valid_res),
 
       .debug_ready_out(debug_mem_ready),
       .debug_valid_out(debug_mem_valid_res),
@@ -179,10 +204,16 @@ module top_level(
       .mem_we_out(proc_mem_we),
       .mem_valid_out(proc_mem_valid_req),
       .mem_data_out(proc_mem_data),
-      .mem_type_out(proc_mem_type)
+      .mem_type_out(proc_mem_type),
 
-      //.sprite_addr_out(),
-      //.sprite_pos_out(),
+      .draw_sprite_out(video_draw_sprite),
+      .sprite_addr_out(video_sprite_addr),
+      .sprite_x_out(video_sprite_x),
+      .sprite_y_out(video_sprite_y),
+      .sprite_height_out(video_sprite_height),
+
+      .clear_buffer_out(video_clear_buffer)
+
       //.active_audio_out(),
       //.error_out()
     );
@@ -193,10 +224,31 @@ module top_level(
   //  );
 
 
-  //chip8_video video (
-  //    .clk_in(clk_100mhz_buf),
-  //    .rst_in(sys_rst),
-  //  );
+  chip8_video video (
+      .clk_in(clk_100mhz_buf),
+      .rst_in(sys_rst),
+
+      .draw_sprite_in(video_draw_sprite),
+      .sprite_addr_in(video_sprite_addr),
+      .sprite_x_in(video_sprite_x),
+      .sprite_y_in(video_sprite_y),
+      .sprite_height_in(video_sprite_height),
+
+      .clear_buffer_in(video_clear_buffer),
+
+      .mem_valid_in(video_mem_valid_res),
+      .mem_ready_in(video_mem_ready),
+      .mem_data_in(mem_data),
+
+      .mem_addr_out(video_mem_addr),
+      .mem_we_out(video_mem_we),
+      .mem_valid_out(video_mem_valid_req),
+      .mem_data_out(video_mem_data),
+      .mem_type_out(video_mem_type),
+
+      .collision_out(video_collision),
+      .done_drawing_out(video_done_drawing)
+    );
 
   // DEBUG stuff
 
@@ -294,7 +346,7 @@ module top_level(
 
   pipeline #(.WIDTH(3), .DEPTH(2)) video_signal_pipe(
     .clk_in(clk_pixel),
-    .rst_in(rst_in),
+    .rst_in(sys_rst),
     .val_in({active_draw, hor_sync, vert_sync}),
     .val_out({active_draw_piped, hor_sync_piped, vert_sync_piped})
   );

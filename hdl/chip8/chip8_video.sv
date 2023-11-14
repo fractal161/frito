@@ -11,12 +11,6 @@ module chip8_video(
     // for double buffering
     input wire ad_in,
 
-    // requested pixel location
-    input wire [5:0] pixel_x_in,
-    input wire [4:0] pixel_y_in,
-    // value of pixel at indicated location
-    output logic pixel_out,
-
     // sprite drawing info
     input wire draw_sprite_in,
     input wire [15:0] sprite_addr_in,
@@ -32,13 +26,13 @@ module chip8_video(
     input wire [7:0] mem_data_in,
 
     output logic [15:0] mem_addr_out,
-    output logic mem_we,
+    output logic mem_we_out,
     output logic mem_valid_out,
     output logic [7:0] mem_data_out,
     output logic mem_type_out, // 0 for RAM (sprite), 1 for VRAM
 
-    output logic collision,
-    output logic done_drawing
+    output logic collision_out,
+    output logic done_drawing_out
   );
 
   localparam WIDTH = 64;
@@ -89,8 +83,8 @@ module chip8_video(
           draw_offset <= 0;
           drawing_state <= 0;
           updating_line <= 0;
-          collision <= 0;
-          done_drawing <= 0;
+          collision_out <= 0;
+          done_drawing_out <= 0;
           mem_valid_out <= 0;
         end
 
@@ -99,8 +93,8 @@ module chip8_video(
             0: begin // request sprite byte
               if (mem_ready_in) begin
                 mem_valid_out <= 1;
-                mem_we <= 0; // read
-                mem_type_out <= 0; // RAM
+                mem_we_out <= 0; // read
+                mem_type_out <= VIDEO_MEM_TYPE_RAM; // RAM
                 mem_addr_out <= sprite_addr + draw_offset;
                 drawing_state <= drawing_state + 1;
               end
@@ -115,16 +109,16 @@ module chip8_video(
             2: begin // request left buffer byte
               if (mem_ready_in) begin
                 mem_valid_out <= 1;
-                mem_we <= 0; // read
-                mem_type_out <= 1; // VRAM
-                mem_addr_out <= {8'b00000000, (sprite_pos_y + draw_offset), left_byte}; // 
+                mem_we_out <= 0; // read
+                mem_type_out <= VIDEO_MEM_TYPE_VRAM; // VRAM
+                mem_addr_out <= {8'b00000000, (sprite_pos_y + draw_offset), left_byte};
                 drawing_state <= drawing_state + 1;
               end
             end
             3: begin // recieve left buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
-                collision <= collision || (|(updating_line[15:8] & mem_data_in));
+                collision_out <= collision_out || (|(updating_line[15:8] & mem_data_in));
 
                 updating_line[15:8] <= updating_line[15:8] ^ mem_data_in; // XOR!
                 drawing_state <= drawing_state + 1;
@@ -133,8 +127,8 @@ module chip8_video(
             4: begin // request right buffer byte
               if (mem_ready_in) begin
                 mem_valid_out <= 1;
-                mem_we <= 0; // read
-                mem_type_out <= 1; // VRAM
+                mem_we_out <= 0; // read
+                mem_type_out <= VIDEO_MEM_TYPE_VRAM; // VRAM
                 mem_addr_out <= {8'b00000000, (sprite_pos_y + draw_offset), right_byte}; // 8+5+3 = 16
                 drawing_state <= drawing_state + 1;
               end
@@ -142,7 +136,7 @@ module chip8_video(
             5: begin // recieve right buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
-                collision <= collision || (|(updating_line[7:0] & mem_data_in));
+                collision_out <= collision_out || (|(updating_line[7:0] & mem_data_in));
 
                 updating_line[7:0] <= updating_line[7:0] ^ mem_data_in; // XOR!
                 drawing_state <= drawing_state + 1;
@@ -152,11 +146,11 @@ module chip8_video(
               if (mem_ready_in) begin
                 mem_data_out <= updating_line[15:8];
                 mem_valid_out <= 1;
-                mem_we <= 1; // write
-                mem_type_out <= 1; // VRAM
+                mem_we_out <= 1; // write
+                mem_type_out <= VIDEO_MEM_TYPE_VRAM; // VRAM
                 mem_addr_out <= {8'b00000000, (sprite_pos_y + draw_offset), left_byte};
                 drawing_state <= drawing_state + 1;
-              end else
+              end else begin
                 mem_valid_out <= 0;
               end
             end
@@ -164,16 +158,16 @@ module chip8_video(
               if (mem_ready_in) begin
                 mem_data_out <= updating_line[7:0];
                 mem_valid_out <= 1;
-                mem_we <= 1; // write
-                mem_type_out <= 1; // VRAM
+                mem_we_out <= 1; // write
+                mem_type_out <= VIDEO_MEM_TYPE_VRAM; // VRAM
                 mem_addr_out <= {8'b00000000, (sprite_pos_y + draw_offset), right_byte};
-              
+
                 // Check if there is another line to draw
                 if (draw_offset < sprite_height) begin
                   draw_offset <= draw_offset + 1;
                   drawing_state <= 0;
                 end else begin
-                  done_drawing <= 1;
+                  done_drawing_out <= 1;
                   state <= RESTING;
                 end
               end else begin
@@ -188,19 +182,20 @@ module chip8_video(
             // Set byte in BRAM to 00000000
             mem_data_out <= 8'b00000000;
             mem_valid_out <= 1;
-            mem_we <= 1; // write
-            mem_type_out <= 1; // VRAM
+            mem_we_out <= 1; // write
+            mem_type_out <= VIDEO_MEM_TYPE_VRAM; // VRAM
             mem_addr_out <= {8'b00000000, clear_pos};
 
             if (clear_pos >= BYTE_WIDTH*HEIGHT-1) begin
+              done_drawing_out <= 1;
               state <= RESTING;
             end
-            
+
             clear_pos <= clear_pos + 1;
           end else begin
             mem_valid_out <= 0;
           end
-          collision <= 0;
+          collision_out <= 0;
         end
       endcase
     end

@@ -26,6 +26,10 @@ module chip8_processor(
     input wire mem_ready_in,
     input wire mem_valid_in,
 
+    // results from video module
+    input wire collision_in,
+    input wire done_drawing_in,
+
     // for asking input module for key
     output logic [4:0] req_key_out,
 
@@ -37,8 +41,13 @@ module chip8_processor(
     output logic [$clog2(PROC_MEM_TYPE_COUNT)-1:0] mem_type_out,
 
     // sprite drawing info
+    output logic draw_sprite_out,
     output logic [11:0] sprite_addr_out,
-    output logic [10:0] sprite_pos_out,
+    output logic [5:0] sprite_x_out,
+    output logic [4:0] sprite_y_out,
+    output logic [3:0] sprite_height_out,
+
+    output logic clear_buffer_out,
 
     // audio on
     output logic active_audio_out,
