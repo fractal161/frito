@@ -354,16 +354,33 @@ module top_level(
     );
 
   // pipeline active_draw, hor_sync, vert_sync by 2 cycles
+  logic [10:0] hcount_piped;
+  logic [9:0] vcount_piped;
   logic active_draw_piped;
   logic hor_sync_piped;
   logic vert_sync_piped;
 
-  pipeline #(.WIDTH(3), .DEPTH(2)) video_signal_pipe(
-    .clk_in(clk_pixel),
-    .rst_in(sys_rst),
-    .val_in({active_draw, hor_sync, vert_sync}),
-    .val_out({active_draw_piped, hor_sync_piped, vert_sync_piped})
-  );
+  // probably should be depth 2, these numbers were from testing with the grid
+  pipeline #(.WIDTH(11), .DEPTH(4)) hcount_pipe(
+      .clk_in(clk_pixel),
+      .rst_in(sys_rst),
+      .val_in(hcount),
+      .val_out(hcount_piped)
+    );
+
+  pipeline #(.WIDTH(10), .DEPTH(4)) vcount_pipe(
+      .clk_in(clk_pixel),
+      .rst_in(sys_rst),
+      .val_in(vcount),
+      .val_out(vcount_piped)
+    );
+
+  pipeline #(.WIDTH(3), .DEPTH(4)) video_signal_pipe(
+      .clk_in(clk_pixel),
+      .rst_in(sys_rst),
+      .val_in({active_draw, hor_sync, vert_sync}),
+      .val_out({active_draw_piped, hor_sync_piped, vert_sync_piped})
+    );
 
   logic [7:0] red, green, blue; //red green and blue pixel values for output
 
@@ -371,6 +388,11 @@ module top_level(
     red = hdmi_pixel_out ? 8'h7F : 8'h00;
     green = hdmi_pixel_out ? 8'hFF : 8'h00;
     blue = hdmi_pixel_out ? 8'hD4 : 8'h00;
+    if (hcount_piped[3:0] == 0 || vcount_piped[3:0] == 0)begin
+      red ^= 8'h40;
+      green ^= 8'h40;
+      blue ^= 8'h40;
+    end
   end
 
   logic [9:0] tmds_10b [0:2]; //output of each TMDS encoder!
