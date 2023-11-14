@@ -9,8 +9,8 @@ module video_multiplexer(
     input wire rst_in,
 
     // hdmi pixel being requested
-    input wire hcount_in, // [0,1280)
-    input wire vcount_in, // [0,720)
+    input wire [10:0] hcount_in, // [0,1280)
+    input wire [9:0] vcount_in, // [0,720)
 
     input wire [7:0] hdmi_data_in,
 
@@ -34,7 +34,7 @@ module video_multiplexer(
       left_offset = chip8_x_out[2:0];
 
       // read from VRAM
-      hdmi_addr_out = ({8'b00000000, chip8_y_out, chip8_x_byte}); // takes 2 cycles to show up in hdmi_data_in
+      hdmi_addr_out = ({8'b00000000, chip8_y_out, chip8_x_byte}); // 2 cycle latency
       hdmi_pixel_out = (hdmi_data_in >> left_offset); // will take the LSB by default
   end
 

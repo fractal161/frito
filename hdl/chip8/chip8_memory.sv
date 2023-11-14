@@ -128,7 +128,7 @@ module chip8_memory #(
   logic [11:0] video_addr;
   logic video_we;
   logic [WIDTH-1:0] video_data;
-  logic [1:0] video_type;
+  logic [$clog2(VIDEO_MEM_TYPE_COUNT)-1:0] video_type;
 
   logic [11:0] debug_addr;
   logic debug_we;
@@ -169,10 +169,15 @@ module chip8_memory #(
         endcase
         proc_ready_out <= 1;
       end else if (!video_ready_out)begin
-        // TODO: casework
         we <= video_we;
         data_in <= video_data;
-        addr <= RAM_DEPTH + video_addr;
+        case (video_type)
+          VIDEO_MEM_TYPE_RAM: addr <= video_addr;
+          VIDEO_MEM_TYPE_VRAM: addr <= RAM_DEPTH + video_addr;
+          default: begin
+            // TODO: error
+          end
+        endcase
         video_ready_out <= 1;
       end else if (!debug_ready_out)begin
         we <= debug_we;
@@ -222,7 +227,13 @@ module chip8_memory #(
         end else begin
           we <= video_we_in;
           data_in <= video_data_in;
-          addr <= RAM_DEPTH + video_addr_in;
+          case (video_type_in)
+            VIDEO_MEM_TYPE_RAM: addr <= video_addr_in;
+            VIDEO_MEM_TYPE_VRAM: addr <= RAM_DEPTH + video_addr_in;
+            default: begin
+              // TODO: error
+            end
+          endcase
         end
       end
       if (debug_ready_out && debug_valid_in)begin
@@ -273,6 +284,9 @@ module chip8_memory #(
     end
   end
 
+  // hdmi address conversion
+  assign hdmi_addr = hdmi_addr_in + RAM_DEPTH;
+
   xilinx_true_dual_port_read_first_2_clock_ram #(
       .RAM_WIDTH(WIDTH),
       .RAM_DEPTH(DEPTH),
@@ -288,7 +302,7 @@ module chip8_memory #(
       .douta(data_out),
 
       // hdmi fetch
-      .addrb(),
+      .addrb(hdmi_addr),
       .clkb(hdmi_clk_in),
       .web(1'b0), // write-enable (hdmi should never write to ram)
       .dinb(8'b0), // read only, so unnecessary

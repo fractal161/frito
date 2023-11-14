@@ -126,6 +126,9 @@ module chip8_processor(
   //logic [7:0] sp; // stack pointer
   //logic [15:0] stack [16]; // TODO: check if this is distinct from main memory
 
+  logic [11:0] sprite_addr;
+  logic [5:0] sprite_x;
+
   always_ff @(posedge clk_in)begin
     // main logic
     if (rst_in)begin
@@ -138,6 +141,10 @@ module chip8_processor(
       error_out <= 0;
       mem_received <= 0;
       mem_sent <= 0;
+      mem_valid_out <= 0;
+      clear_buffer_out <= 0;
+      draw_sprite_out <= 0;
+      active_audio_out <= 0;
     end else if (active_in)begin
       // main state machine goes here. states are as follows:
       // - idle (wait until chip8_clk_in)
@@ -162,7 +169,7 @@ module chip8_processor(
           case (substate)
             0: begin // fetch pc high
               if (mem_ready_in)begin // fetch high pc
-                mem_addr_out <= 18; // pc high
+                mem_addr_out <= REG_PC; // pc high
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
                 mem_type_out <= PROC_MEM_TYPE_REG;
@@ -173,7 +180,7 @@ module chip8_processor(
             end
             1: begin // wait for pc high, fetch pc low
               if (!mem_sent && mem_ready_in)begin
-                mem_addr_out <= 19; // pc low
+                mem_addr_out <= REG_PC+1; // pc low
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
                 mem_type_out <= PROC_MEM_TYPE_REG;
@@ -265,9 +272,25 @@ module chip8_processor(
           // TODO: 00E0, 1nnn, 6xkk, 7xkk, Annn, Dxyn
           case (instr)
             CLS: begin // 00E0
-              // set all pixels to 0 (TODO: actually implement)
-              state <= FINISH;
-              substate <= 0;
+              // set all pixels to 0
+              case (substate)
+                0: begin // ask video module to clear everything
+                  clear_buffer_out <= 1;
+                  substate <= substate + 1;
+                end
+                1: begin // wait for video module to finish
+                  if (done_drawing_in)begin
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                  clear_buffer_out <= 0;
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
+              //state <= FINISH;
+              //substate <= 0;
             end
             JP_ABS: begin // 1nnn
               // set pc to nnn
@@ -332,7 +355,7 @@ module chip8_processor(
                 end
                 1: begin
                   if (mem_ready_in)begin
-                    mem_addr_out <= 17; // Ih
+                    mem_addr_out <= 17; // Il
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
                     mem_data_out <= opcode[7:0];
@@ -352,9 +375,108 @@ module chip8_processor(
               // display n-byte sprite defined at memory location I
               // beginning at pixel (Vx, Vy)
               // if collision, set VF to 1
-              // TODO: actually implement
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Ih
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_I;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Ih, fetch Il
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= REG_I+1;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    sprite_addr[11:8] <= mem_data_in[3:0];
+                    mem_received <= 1;
+                  end
+                  if ((mem_valid_in|mem_received) &&
+                    (mem_ready_in|mem_sent))begin
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Il, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= opcode[11:8];
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    sprite_addr[7:0] <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  if ((mem_valid_in|mem_received) &&
+                    (mem_ready_in|mem_sent))begin
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate+1;
+                  end
+                end
+                3: begin // wait for Vx, fetch Vy
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= opcode[7:4];
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    sprite_x <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  if ((mem_valid_in|mem_received) &&
+                    (mem_ready_in|mem_sent))begin
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate+1;
+                  end
+                end
+                4: begin // wait for Vy, then make request
+                  if (mem_valid_in)begin
+                    draw_sprite_out <= 1;
+                    sprite_addr_out <= sprite_addr;
+                    sprite_x_out <= sprite_x;
+                    sprite_y_out <= mem_data_in;
+                    sprite_height_out <= opcode[4:0];
+                    substate <= substate+1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                5: begin
+                  if (done_drawing_in)begin
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                  draw_sprite_out <= 0;
+                end
+                // TODO TODO TODO: write collision bit
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             default: begin
               error_out <= ERR_PARSE;
@@ -366,7 +488,7 @@ module chip8_processor(
           case (substate)
             0: begin // write high byte
               if (mem_ready_in)begin
-                mem_addr_out <= 18; // pc high
+                mem_addr_out <= REG_PC; // pc high
                 mem_we_out <= 1;
                 mem_valid_out <= 1;
                 mem_data_out <= pc[15:8];
@@ -378,7 +500,7 @@ module chip8_processor(
             end
             1: begin
               if (mem_ready_in)begin
-                mem_addr_out <= 19; // pc low
+                mem_addr_out <= REG_PC+1; // pc low
                 mem_we_out <= 1;
                 mem_valid_out <= 1;
                 mem_data_out <= pc[7:0];

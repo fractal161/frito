@@ -53,7 +53,11 @@ module top_level(
 
   logic clk_100mhz_buf;
 
-  BUFG mbf (.I(clk_100mhz), .O(clk_100mhz_buf));
+  `ifdef SYNTHESIS
+    BUFG mbf (.I(clk_100mhz), .O(clk_100mhz_buf));
+  `else
+    assign clk_100mhz_buf = clk_100mhz;
+  `endif
 
   // chip-8 stuff! (TODO: fill out)
 
@@ -80,7 +84,12 @@ module top_level(
   logic btn_held;
   logic btn_pulse;
   logic prev_btn_held;
-  debouncer btn1_db(
+  `ifdef SYNTHESIS
+    localparam DEBOUNCE_TIME_MS = 5;
+  `else
+    localparam DEBOUNCE_TIME_MS = 0.000001;
+  `endif
+  debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) btn1_db(
       .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
       .dirty_in(btn[1]),
@@ -103,7 +112,7 @@ module top_level(
   logic proc_mem_ready;
   logic proc_mem_valid_res;
 
-  logic [11:0] video_mem_addr;
+  logic [15:0] video_mem_addr;
   logic video_mem_we;
   logic video_mem_valid_req;
   logic [7:0] video_mem_data;
@@ -197,6 +206,9 @@ module top_level(
       .mem_ready_in(proc_mem_ready),
       .mem_valid_in(proc_mem_valid_res),
       .mem_data_in(mem_data),
+
+      .collision_in(video_collision),
+      .done_drawing_in(video_done_drawing),
 
       //.req_key_out(),
 
@@ -298,13 +310,15 @@ module top_level(
   // HDMI stuff
 
   //clock manager...creates 74.25 Hz and 5 times 74.25 MHz for pixel and TMDS
-  hdmi_clk_wiz_720p mhdmicw (
-      .reset(0),
-      .locked(locked),
-      .clk_ref(clk_100mhz_buf),
-      .clk_pixel(clk_pixel),
-      .clk_tmds(clk_5x)
-    );
+  `ifdef SYNTHESIS
+    hdmi_clk_wiz_720p mhdmicw (
+        .reset(0),
+        .locked(locked),
+        .clk_ref(clk_100mhz_buf),
+        .clk_pixel(clk_pixel),
+        .clk_tmds(clk_5x)
+      );
+  `endif
 
   logic [10:0] hcount; //hcount of system!
   logic [9:0] vcount; //vcount of system!
@@ -391,29 +405,31 @@ module top_level(
     );
 
   //three tmds_serializers (blue, green, red):
-  tmds_serializer red_ser(
-      .clk_pixel_in(clk_pixel),
-      .clk_5x_in(clk_5x),
-      .rst_in(sys_rst),
-      .tmds_in(tmds_10b[2]),
-      .tmds_out(tmds_signal[2])
-    );
+  `ifdef SYNTHESIS
+    tmds_serializer red_ser(
+        .clk_pixel_in(clk_pixel),
+        .clk_5x_in(clk_5x),
+        .rst_in(sys_rst),
+        .tmds_in(tmds_10b[2]),
+        .tmds_out(tmds_signal[2])
+      );
 
-  tmds_serializer green_ser(
-      .clk_pixel_in(clk_pixel),
-      .clk_5x_in(clk_5x),
-      .rst_in(sys_rst),
-      .tmds_in(tmds_10b[1]),
-      .tmds_out(tmds_signal[1])
-    );
+    tmds_serializer green_ser(
+        .clk_pixel_in(clk_pixel),
+        .clk_5x_in(clk_5x),
+        .rst_in(sys_rst),
+        .tmds_in(tmds_10b[1]),
+        .tmds_out(tmds_signal[1])
+      );
 
-  tmds_serializer blue_ser(
-      .clk_pixel_in(clk_pixel),
-      .clk_5x_in(clk_5x),
-      .rst_in(sys_rst),
-      .tmds_in(tmds_10b[0]),
-      .tmds_out(tmds_signal[0])
-    );
+    tmds_serializer blue_ser(
+        .clk_pixel_in(clk_pixel),
+        .clk_5x_in(clk_5x),
+        .rst_in(sys_rst),
+        .tmds_in(tmds_10b[0]),
+        .tmds_out(tmds_signal[0])
+      );
+  `endif
 
   //output buffers generating differential signals:
   //three for the r,g,b signals and one that is at the pixel clock rate
@@ -421,10 +437,12 @@ module top_level(
   //asserted during blanking and sync periods to synchronize their faster bit
   //clocks off of the slower pixel clock (so they can recover a clock of about
   //742.5 MHz from the slower 74.25 MHz clock)
-  OBUFDS OBUFDS_blue (.I(tmds_signal[0]), .O(hdmi_tx_p[0]), .OB(hdmi_tx_n[0]));
-  OBUFDS OBUFDS_green(.I(tmds_signal[1]), .O(hdmi_tx_p[1]), .OB(hdmi_tx_n[1]));
-  OBUFDS OBUFDS_red  (.I(tmds_signal[2]), .O(hdmi_tx_p[2]), .OB(hdmi_tx_n[2]));
-  OBUFDS OBUFDS_clock(.I(clk_pixel), .O(hdmi_clk_p), .OB(hdmi_clk_n));
+  `ifdef SYNTHESIS
+    OBUFDS OBUFDS_blue (.I(tmds_signal[0]), .O(hdmi_tx_p[0]), .OB(hdmi_tx_n[0]));
+    OBUFDS OBUFDS_green(.I(tmds_signal[1]), .O(hdmi_tx_p[1]), .OB(hdmi_tx_n[1]));
+    OBUFDS OBUFDS_red  (.I(tmds_signal[2]), .O(hdmi_tx_p[2]), .OB(hdmi_tx_n[2]));
+    OBUFDS OBUFDS_clock(.I(clk_pixel), .O(hdmi_clk_p), .OB(hdmi_clk_n));
+  `endif
 
 endmodule // top_level
 `default_nettype wire

@@ -58,7 +58,7 @@ module chip8_video(
 
   logic [15:0] updating_line;
 
-  logic [7:0] clear_pos; // Ranges from 0 to 8*32 for now 
+  logic [7:0] clear_pos; // Ranges from 0 to 8*32 for now
 
   always_ff @(posedge clk_in)begin
     if (rst_in)begin
@@ -97,6 +97,8 @@ module chip8_video(
                 mem_type_out <= VIDEO_MEM_TYPE_RAM; // RAM
                 mem_addr_out <= sprite_addr + draw_offset;
                 drawing_state <= drawing_state + 1;
+              end else begin
+                mem_valid_out <= 0;
               end
             end
             1: begin // recieve sprite byte
@@ -113,9 +115,11 @@ module chip8_video(
                 mem_type_out <= VIDEO_MEM_TYPE_VRAM; // VRAM
                 mem_addr_out <= {8'b00000000, (sprite_pos_y + draw_offset), left_byte};
                 drawing_state <= drawing_state + 1;
+              end else begin
+                mem_valid_out <= 0;
               end
             end
-            3: begin // recieve left buffer byte
+            3: begin // receive left buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
                 collision_out <= collision_out || (|(updating_line[15:8] & mem_data_in));
@@ -133,7 +137,7 @@ module chip8_video(
                 drawing_state <= drawing_state + 1;
               end
             end
-            5: begin // recieve right buffer byte
+            5: begin // receive right buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
                 collision_out <= collision_out || (|(updating_line[7:0] & mem_data_in));
@@ -173,6 +177,8 @@ module chip8_video(
               end else begin
                 mem_valid_out <= 0;
               end
+            end
+            default: begin
             end
           endcase
         end
