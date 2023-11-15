@@ -106,6 +106,7 @@ module chip8_memory #(
   // parameters for first port
   logic [$clog2(DEPTH)-1:0] addr;
   logic we;
+  logic we_piped;
   logic [WIDTH-1:0] data_in;
 
   // parameters for second port
@@ -117,6 +118,13 @@ module chip8_memory #(
       .rst_in(rst_in),
       .val_in(state),
       .val_out(state_out)
+    );
+
+  pipeline #(.WIDTH(1), .DEPTH(1)) we_pipeline(
+      .clk_in(clk_in),
+      .rst_in(rst_in),
+      .val_in(we),
+      .val_out(we_piped)
     );
 
   // temp storage for various params
@@ -261,9 +269,9 @@ module chip8_memory #(
         end
       end
       // determine what to send out
-      proc_valid_out <= (state_out == PROC);
-      video_valid_out <= (state_out == VIDEO);
-      debug_valid_out <= (state_out == DEBUG);
+      proc_valid_out <= (state_out == PROC && !we_piped);
+      video_valid_out <= (state_out == VIDEO && !we_piped);
+      debug_valid_out <= (state_out == DEBUG && !we_piped);
 
       // massive conditional for state
       if (!proc_ready_out

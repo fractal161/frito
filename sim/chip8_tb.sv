@@ -60,6 +60,10 @@ module chip8_tb;
     #10;
     btn_in[1] = 0;
     #5000;
+    btn_in[1] = 1;
+    #10;
+    btn_in[1] = 0;
+    #5000;
     $display("Simulation complete!");
     $finish;
   end
