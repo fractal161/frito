@@ -66,8 +66,6 @@ module chip8_processor(
   // tracks different steps within each main state
   logic [4:0] substate;
 
-  localparam int FETCH_TIME = 4;
-
   // opcode types
   //localparam int SYS = 0; // 0nnn, TODO: apparently this is deprecated???
   localparam int CLS = 1; // 00E0
@@ -101,7 +99,7 @@ module chip8_processor(
   localparam int LD_WST = 29; // Fx18
   localparam int ADD_I = 30; // Fx1E
   localparam int LD_SPR = 31; // Fx29
-  localparam int LD_BCD = 32; //Fx33
+  localparam int LD_BCD = 32; // Fx33
   localparam int LD_WREG = 33; // Fx55
   localparam int LD_RREG = 34; // Fx65
 
@@ -243,33 +241,61 @@ module chip8_processor(
                 state <= EXECUTE;
                 substate <= 0;
                 case (opcode[15:12])
-                  4'h0: begin
-                    // TODO: handle RET
-                    if ({opcode[11:8], mem_data_in} == 8'h0E0)begin
-                      instr <= CLS;
-                    end else begin
-                      error_out <= 1;
-                    end
-                  end
+                  4'h0: case({opcode[11:8], mem_data_in})
+                    12'h0E0: instr <= CLS;
+                    12'h0EE: instr <= RET;
+                    default: error_out <= ERR_PARSE;
+                  endcase
                   // TODO: all other leading digits/instructions
                   4'h1: instr <= JP_ABS;
+                  4'h2: instr <= CALL;
+                  4'h3: instr <= SE_IMM;
+                  4'h4: instr <= SNE_IMM;
+                  4'h5: instr <= SE_REG;
                   4'h6: instr <= LD_IMM;
                   4'h7: instr <= ADD_IMM;
+                  4'h8: case (mem_data_in[3:0])
+                    4'h0: instr <= LD_REG;
+                    4'h1: instr <= OR;
+                    4'h2: instr <= AND;
+                    4'h3: instr <= XOR;
+                    4'h4: instr <= ADD_REG;
+                    4'h5: instr <= SUB;
+                    4'h6: instr <= SHR;
+                    4'h7: instr <= SUBN;
+                    4'hE: instr <= SHL;
+                    default: error_out <= ERR_PARSE;
+                  endcase
+                  4'h9: instr <= SNE_REG;
                   4'hA: instr <= LD_I;
+                  4'hB: instr <= JP_REL;
+                  4'hC: instr <= RND;
                   4'hD: instr <= DRW;
-                  default: begin
-                    error_out <= ERR_PARSE;
-                  end
+                  4'hE: case (mem_data_in[7:0])
+                    8'h9E: instr <= SKP;
+                    8'hA1: instr <= SKNP;
+                    default: error_out <= ERR_PARSE;
+                  endcase
+                  4'hF: case (mem_data_in[7:0])
+                    8'h07: instr <= LD_RDT;
+                    8'h0A: instr <= LD_KEY;
+                    8'h15: instr <= LD_WDT;
+                    8'h18: instr <= LD_WST;
+                    8'h1E: instr <= ADD_I;
+                    8'h29: instr <= LD_SPR;
+                    8'h33: instr <= LD_BCD;
+                    8'h55: instr <= LD_WREG;
+                    8'h65: instr <= LD_RREG;
+                    default: error_out <= ERR_PARSE;
+                  endcase
+                  default: error_out <= ERR_PARSE;
                 endcase
               end
             end
-            default: begin
-              error_out <= ERR_PARSE;
-            end
+            default: error_out <= ERR_PARSE;
           endcase
         end
         EXECUTE: begin
-          // TODO: 00E0, 1nnn, 6xkk, 7xkk, Annn, Dxyn
           case (instr)
             CLS: begin // 00E0
               // set all pixels to 0
@@ -292,9 +318,27 @@ module chip8_processor(
               //state <= FINISH;
               //substate <= 0;
             end
+            RET: begin // 00EE
+            end
             JP_ABS: begin // 1nnn
               // set pc to nnn
               pc <= opcode[11:0];
+              state <= FINISH;
+              substate <= 0;
+            end
+            CALL: begin // 2nnn
+              state <= FINISH;
+              substate <= 0;
+            end
+            SE_IMM: begin // 3xkk
+              state <= FINISH;
+              substate <= 0;
+            end
+            SNE_IMM: begin // 4xkk
+              state <= FINISH;
+              substate <= 0;
+            end
+            SE_REG: begin // 5xy0
               state <= FINISH;
               substate <= 0;
             end
@@ -338,6 +382,46 @@ module chip8_processor(
                 end
               endcase
             end
+            LD_REG: begin // 8xy0
+              state <= FINISH;
+              substate <= 0;
+            end
+            OR: begin // 8xy1
+              state <= FINISH;
+              substate <= 0;
+            end
+            AND: begin // 8xy2
+              state <= FINISH;
+              substate <= 0;
+            end
+            XOR: begin // 8xy3
+              state <= FINISH;
+              substate <= 0;
+            end
+            ADD_REG: begin // 8xy4
+              state <= FINISH;
+              substate <= 0;
+            end
+            SUB: begin // 8xy5
+              state <= FINISH;
+              substate <= 0;
+            end
+            SHR: begin // 8xy6
+              state <= FINISH;
+              substate <= 0;
+            end
+            SUBN: begin // 8xy7
+              state <= FINISH;
+              substate <= 0;
+            end
+            SHL: begin // 8xyE
+              state <= FINISH;
+              substate <= 0;
+            end
+            SNE_REG: begin // 9xy0
+              state <= FINISH;
+              substate <= 0;
+            end
             LD_I: begin // Annn
               // set I to nnn
               case (substate)
@@ -370,6 +454,14 @@ module chip8_processor(
                   error_out <= ERR_EXEC;
                 end
               endcase
+            end
+            JP_REL: begin // Bnnn
+              state <= FINISH;
+              substate <= 0;
+            end
+            RND: begin // Cxkk
+              state <= FINISH;
+              substate <= 0;
             end
             DRW: begin // Dxyn
               // display n-byte sprite defined at memory location I
@@ -477,6 +569,50 @@ module chip8_processor(
                   error_out <= ERR_EXEC;
                 end
               endcase
+            end
+            SKP: begin // Ex9E
+              state <= FINISH;
+              substate <= 0;
+            end
+            SKNP: begin // ExA1
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_RDT: begin // Fx07
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_KEY: begin // Fx0A
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_WDT: begin // Fx15
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_WST: begin // Fx18
+              state <= FINISH;
+              substate <= 0;
+            end
+            ADD_I: begin // Fx1E
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_SPR: begin // Fx29
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_BCD: begin // Fx33
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_WREG: begin // Fx55
+              state <= FINISH;
+              substate <= 0;
+            end
+            LD_RREG: begin // Fx65
+              state <= FINISH;
+              substate <= 0;
             end
             default: begin
               error_out <= ERR_PARSE;
