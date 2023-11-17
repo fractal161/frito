@@ -146,7 +146,7 @@ module top_level(
   logic [7:0] hdmi_mem_data;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(ibm.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(test_rom1.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
