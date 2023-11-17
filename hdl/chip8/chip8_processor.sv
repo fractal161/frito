@@ -67,7 +67,7 @@ module chip8_processor(
   logic [4:0] substate;
 
   // opcode types
-  //localparam int SYS = 0; // 0nnn, TODO: apparently this is deprecated???
+  //localparam int SYS = 0; // 0nnn, (ignored by modern interpreters)
   localparam int CLS = 1; // 00E0
   localparam int RET = 2; // 00EE
   localparam int JP_ABS = 3; // 1nnn
@@ -115,14 +115,11 @@ module chip8_processor(
   logic mem_received;
   logic mem_sent;
 
-  // registers (TODO: delete because we do everything through bram now)
-  //logic [8:0] vregs [16]; // registers V0 through V15/VF
-  //logic [15:0] ireg; // register I
-  //logic [7:0] delay_timer;
-  //logic [7:0] sound_timer;
+  // temporary vars when requesting from memory
+  logic [7:0] reg_tmp;
   logic [15:0] pc; // program counter
   //logic [7:0] sp; // stack pointer
-  //logic [15:0] stack [16]; // TODO: check if this is distinct from main memory
+  //logic [15:0] stack [16];
 
   logic [11:0] sprite_addr;
   logic [5:0] sprite_x;
@@ -150,7 +147,6 @@ module chip8_processor(
       // - execute (massive switch statement for each instruction,
       //     i think variable length execution is fine because most of the
       //     time will be spent in idle anyways)
-      // TODO: make all memory fetches use ram_ready_in
       case (state)
         IDLE: begin
           if (chip8_clk_in)begin
@@ -331,16 +327,102 @@ module chip8_processor(
               substate <= 0;
             end
             SE_IMM: begin // 3xkk
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vx
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vx
+                  if (mem_valid_in)begin
+                    if (mem_data_in == opcode[7:0])begin
+                      pc <= pc + 2;
+                    end
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             SNE_IMM: begin // 4xkk
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vx
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vx
+                  if (mem_valid_in)begin
+                    if (mem_data_in != opcode[7:0])begin
+                      pc <= pc + 2;
+                    end
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             SE_REG: begin // 5xy0
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vy
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[7:4]); // Vy
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vy, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Vx, then compare Vx and Vy
+                  if (mem_valid_in)begin
+                    if (reg_tmp == mem_data_in)begin
+                      pc <= pc + 2;
+                    end
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_IMM: begin // 6xkk
               // set Vx to kk
@@ -358,7 +440,7 @@ module chip8_processor(
               // set Vx to Vx + kk
               case (substate)
                 0: begin // fetch Vx
-                  mem_addr_out <= 5'(opcode[11:8]);
+                  mem_addr_out <= 12'(opcode[11:8]);
                   mem_we_out <= 0;
                   mem_valid_out <= 1;
                   mem_type_out <= PROC_MEM_TYPE_REG;
@@ -366,7 +448,7 @@ module chip8_processor(
                 end
                 1: begin // write Vx + kk
                   if (mem_valid_in)begin
-                    mem_addr_out <= 5'(opcode[11:8]);
+                    mem_addr_out <= 12'(opcode[11:8]);
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in + opcode[7:0];
@@ -383,30 +465,307 @@ module chip8_processor(
               endcase
             end
             LD_REG: begin // 8xy0
-              state <= FINISH;
-              substate <= 0;
+              // set Vx to Vy
+              case (substate)
+                0: begin
+                  mem_addr_out <= 12'(opcode[7:4]);
+                  mem_we_out <= 0;
+                  mem_valid_out <= 1;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  substate <= substate + 1;
+                end
+                1: begin // write Vy to Vx
+                  if (mem_valid_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]);
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= mem_data_in;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             OR: begin // 8xy1
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vy
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[7:4]); // Vy
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vy, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Vx, then write Vy | Vx to Vx
+                  if (mem_valid_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]);
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp | mem_data_in;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             AND: begin // 8xy2
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vy
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[7:4]); // Vy
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vy, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Vx, then write Vy & Vx to Vx
+                  if (mem_valid_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]);
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp & mem_data_in;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             XOR: begin // 8xy3
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vy
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[7:4]); // Vy
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vy, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Vx, then write Vy ^ Vx to Vx
+                  if (mem_valid_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]);
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp ^ mem_data_in;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             ADD_REG: begin // 8xy4
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vy
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[7:4]); // Vy
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vy, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Vx, then write Vy + Vx to Vx
+                  if (mem_valid_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]);
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp + mem_data_in;
+                    reg_tmp <= (9'(reg_tmp) + 9'(mem_data_in) >= 9'h100);
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end
+                end
+                3: begin // write overflow to VF
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_VF;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             SUB: begin // 8xy5
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vy
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[7:4]); // Vy
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vy, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Vx, then write Vx - Vy to Vx
+                  if (mem_valid_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]);
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= mem_data_in - reg_tmp;
+                    reg_tmp <= (mem_data_in > reg_tmp);
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end
+                end
+                3: begin // write underflow to VF
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_VF;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             SHR: begin // 8xy6
+              // TODO: schip8 compatibility
               state <= FINISH;
               substate <= 0;
             end
@@ -415,12 +774,57 @@ module chip8_processor(
               substate <= 0;
             end
             SHL: begin // 8xyE
+              // TODO: schip8 compatibility
               state <= FINISH;
               substate <= 0;
             end
             SNE_REG: begin // 9xy0
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vy
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[7:4]); // Vy
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end
+                end
+                1: begin // wait for Vy, fetch Vx
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                2: begin // wait for Vx, then compare Vx and Vy
+                  if (mem_valid_in)begin
+                    if (reg_tmp != mem_data_in)begin
+                      pc <= pc + 2;
+                    end
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_I: begin // Annn
               // set I to nnn
@@ -456,8 +860,31 @@ module chip8_processor(
               endcase
             end
             JP_REL: begin // Bnnn
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin
+                  if (mem_ready_in)begin // fetch V0
+                    mem_addr_out <= REG_V0;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin
+                  if (mem_ready_in)begin // write relative pc address
+                    pc <= mem_data_in + opcode[11:0];
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             RND: begin // Cxkk
               state <= FINISH;
@@ -559,12 +986,21 @@ module chip8_processor(
                 end
                 5: begin
                   if (done_drawing_in)begin
-                    state <= FINISH;
-                    substate <= 0;
+                    substate <= substate+1;
                   end
                   draw_sprite_out <= 0;
                 end
-                // TODO TODO TODO: write collision bit
+                6: begin
+                  if (mem_ready_in)begin // write collision bit
+                    mem_addr_out <= REG_VF;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= 8'(collision_in);
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
                 default: begin
                   error_out <= ERR_EXEC;
                 end
