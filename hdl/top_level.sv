@@ -21,7 +21,7 @@ module top_level(
   output logic [2:0] hdmi_tx_p, //hdmi output signals (positives) (blue, green, red)
   output logic [2:0] hdmi_tx_n, //hdmi output signals (negatives) (blue, green, red)
   output logic hdmi_clk_p, hdmi_clk_n //differential hdmi clock
-  output logic spkl, spkr, //speaker outputs
+  //output logic spkl, spkr, //speaker outputs
   );
 
   // TODO: this should be in chip8_params why is it not imported here
