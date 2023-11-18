@@ -1,3 +1,4 @@
 vivado.log
 *.vcd
 sim/*.out
+.DS_Store
