@@ -117,7 +117,7 @@ module chip8_processor(
 
   // temporary vars when requesting from memory
   logic [7:0] reg_tmp;
-  logic [15:0] i_tmp;
+  logic [15:0] addr_tmp; // used for I and for stack addr
   logic [15:0] pc; // program counter
   //logic [7:0] sp; // stack pointer
   //logic [15:0] stack [16];
@@ -314,12 +314,73 @@ module chip8_processor(
                   error_out <= ERR_EXEC;
                 end
               endcase
-              //state <= FINISH;
-              //substate <= 0;
             end
             RET: begin // 00EE
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch stack pointer
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_SP;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // decr, then fetch stack addr high
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in - 1;
+                    mem_addr_out <= (mem_data_in - 1) << 1;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_STK;
+                    mem_received <= 0;
+                    mem_sent <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                2: begin // wait for stack addr high, fetch stack addr low
+                  if (!mem_sent && mem_ready_in)begin
+                    mem_addr_out <= (reg_tmp << 1) + 1;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_STK;
+                    mem_sent <= 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+
+                  if (mem_valid_in)begin
+                    pc[15:8] <= mem_data_in;
+                    mem_received <= 1;
+                  end
+                  // if both actions have completed, proceed
+                  if ((mem_valid_in|mem_received)
+                    && (mem_ready_in|mem_sent))begin
+                    substate <= substate+1;
+                  end
+                end
+                3: begin // wait, then set pc/write new sp
+                  if (mem_valid_in)begin
+                    pc[7:0] <= mem_data_in;
+                    mem_addr_out <= REG_SP;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             JP_ABS: begin // 1nnn
               // set pc to nnn
@@ -328,8 +389,62 @@ module chip8_processor(
               substate <= 0;
             end
             CALL: begin // 2nnn
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch sp
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_SP;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // write pc high to stack
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in;
+                    mem_addr_out <= mem_data_in << 1;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= pc[15:8];
+                    mem_type_out <= PROC_MEM_TYPE_STK;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                2: begin // write pc low to stack
+                  if (mem_ready_in)begin
+                    mem_addr_out <= (reg_tmp << 1) + 1;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= pc[7:0];
+                    mem_type_out <= PROC_MEM_TYPE_STK;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                3: begin // write new sp to stack
+                  if (mem_ready_in)begin
+                    // set pc
+                    pc <= 16'(opcode[11:0]);
+                    mem_addr_out <= REG_SP;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp + 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             SE_IMM: begin // 3xkk
               case (substate)
@@ -818,8 +933,6 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
-                    mem_received <= 0;
-                    mem_sent <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -932,8 +1045,6 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
-                    mem_received <= 0;
-                    mem_sent <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
