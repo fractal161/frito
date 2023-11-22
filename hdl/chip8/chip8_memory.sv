@@ -187,7 +187,13 @@ module chip8_memory #(
         data_in <= proc_size ? proc_data[15:8] : proc_data[7:0];
         case (proc_type)
           PROC_MEM_TYPE_RAM: addr <= proc_addr;
-          PROC_MEM_TYPE_REG: addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr;
+          PROC_MEM_TYPE_REG: begin
+            if (proc_addr[11])begin
+              addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr[7:4];
+            end else begin
+              addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr;
+            end
+          end
           PROC_MEM_TYPE_STK: addr <= RAM_DEPTH + VRAM_DEPTH
             + REG_DEPTH + proc_addr;
           default: begin
@@ -197,7 +203,11 @@ module chip8_memory #(
         if (proc_size == 1)begin
           proc_size <= 0;
           proc_ready_out <= 0;
-          proc_addr <= proc_addr+1;
+          if (proc_type == PROC_MEM_TYPE_REG && proc_addr[11])begin
+            proc_addr <= 12'(proc_addr[3:0]);
+          end else begin
+            proc_addr <= proc_addr+1;
+          end
         end else begin
           proc_ready_out <= 1;
         end
@@ -246,7 +256,11 @@ module chip8_memory #(
             // save data
             proc_we <= proc_we_in;
             proc_data <= proc_data_in;
-            proc_addr <= proc_addr_in+1; // since we're doing the high byte now
+            if (proc_type_in == PROC_MEM_TYPE_REG && proc_addr_in[11])begin
+              proc_addr <= proc_addr_in[3:0];
+            end else begin
+              proc_addr <= proc_addr_in+1; // since we're doing the high byte now
+            end
             proc_type <= proc_type_in;
             proc_size <= 0; // since we're doing the high byte now
             proc_ready_out <= 0;
@@ -255,7 +269,13 @@ module chip8_memory #(
           end
           case (proc_type_in)
             PROC_MEM_TYPE_RAM: addr <= proc_addr_in;
-            PROC_MEM_TYPE_REG: addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr_in;
+            PROC_MEM_TYPE_REG: begin
+              if (proc_addr_in[11])begin
+                addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr_in[7:4];
+              end else begin
+                addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr_in;
+              end
+            end
             PROC_MEM_TYPE_STK: addr <= RAM_DEPTH + VRAM_DEPTH
               + REG_DEPTH + proc_addr_in;
             default: begin
