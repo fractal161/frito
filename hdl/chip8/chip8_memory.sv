@@ -37,21 +37,24 @@ module chip8_memory #(
     input wire [11:0] proc_addr_in,
     input wire proc_we_in,
     input wire proc_valid_in,
-    input wire [WIDTH-1:0] proc_data_in,
+    input wire [2*WIDTH-1:0] proc_data_in,
     input wire [$clog2(PROC_MEM_TYPE_COUNT)-1:0] proc_type_in,
+    input wire proc_size_in, // 0 for one byte, 1 for two bytes
 
     // r/w a byte from the video buffer (TODO: how to handle address??)
     input wire [15:0] video_addr_in,
     input wire video_we_in,
     input wire video_valid_in,
-    input wire [WIDTH-1:0] video_data_in,
+    input wire [2*WIDTH-1:0] video_data_in,
     input wire [0:0] video_type_in,
+    input wire video_size_in, // 0 for one byte, 1 for two bytes
 
     input wire [11:0] debug_addr_in,
     input wire debug_we_in,
     input wire debug_valid_in,
-    input wire [WIDTH-1:0] debug_data_in,
+    input wire [2*WIDTH-1:0] debug_data_in,
     input wire [$clog2(DEBUG_MEM_TYPE_COUNT)-1:0] debug_type_in,
+    input wire debug_size_in, // 0 for one byte, 1 for two bytes
 
     // flash rom (TODO: add)
 
@@ -72,7 +75,7 @@ module chip8_memory #(
     output logic debug_valid_out,
 
     // actual data that's read
-    output logic [WIDTH-1:0] data_out,
+    output logic [2*WIDTH-1:0] data_out,
 
     // requested value of hdmi pixel
     output logic [WIDTH-1:0] hdmi_data_out
@@ -93,34 +96,38 @@ module chip8_memory #(
   // types of access patterns that compete for the first port
   // each one has their own addressing strategy, so they're handled separately
   localparam int NONE = 0; // don't set anything to valid
-  localparam int PROC = 1;
-  localparam int VIDEO = 2; // video module setting a pixel (TODO: offsets)
-  localparam int DEBUG = 3;
+  localparam int PROC_HI = 1;
+  localparam int PROC_LO = 2;
+  localparam int VIDEO = 3; // video module setting a pixel (TODO: offsets)
+  localparam int DEBUG =  4;
   //localparam int FLASH = 5;
-  localparam int NUM_STATES = 4; // for looping counter
+  localparam int NUM_STATES = 5; // for looping counter
 
   logic [$clog2(NUM_STATES)-1:0] state; // continually cycles through all states
 
   logic [$clog2(NUM_STATES)-1:0] state_out;
+  logic [$clog2(NUM_STATES)-1:0] last_state_out;
 
   // parameters for first port
   logic [$clog2(DEPTH)-1:0] addr;
   logic we;
   logic we_piped;
   logic [WIDTH-1:0] data_in;
+  logic [WIDTH-1:0] data_hi;
+  logic [WIDTH-1:0] data_lo;
 
   // parameters for second port
   logic [$clog2(DEPTH)-1:0] hdmi_addr;
 
   // output is the type of state (depth verified using tb)
-  pipeline #(.WIDTH($clog2(NUM_STATES)), .DEPTH(1)) state_pipeline(
+  pipeline #(.WIDTH($clog2(NUM_STATES)), .DEPTH(2)) state_pipeline(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(state),
       .val_out(state_out)
     );
 
-  pipeline #(.WIDTH(1), .DEPTH(1)) we_pipeline(
+  pipeline #(.WIDTH(1), .DEPTH(2)) we_pipeline(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(we),
@@ -130,42 +137,40 @@ module chip8_memory #(
   // temp storage for various params
   logic [11:0] proc_addr;
   logic proc_we;
-  logic [WIDTH-1:0] proc_data;
+  logic [2*WIDTH-1:0] proc_data;
   logic [$clog2(PROC_MEM_TYPE_COUNT)-1:0] proc_type;
+  logic proc_size;
 
   logic [11:0] video_addr;
   logic video_we;
-  logic [WIDTH-1:0] video_data;
+  logic [2*WIDTH-1:0] video_data;
   logic [$clog2(VIDEO_MEM_TYPE_COUNT)-1:0] video_type;
+  logic video_size;
 
   logic [11:0] debug_addr;
   logic debug_we;
-  logic [WIDTH-1:0] debug_data;
+  logic [2*WIDTH-1:0] debug_data;
   logic [$clog2(DEBUG_MEM_TYPE_COUNT)-1:0] debug_type;
+  logic debug_size;
 
   always_ff @(posedge clk_in)begin
     if (rst_in)begin
       state <= NONE;
       proc_ready_out <= 1;
-      proc_valid_out <= 0;
-
       video_ready_out <= 1;
-      video_valid_out <= 0;
-
       debug_ready_out <= 1;
-      debug_valid_out <= 0;
 
       addr <= 0;
       we <= 0;
       data_in <= 0;
-
+      data_hi <= 0;
     end else begin
       // figure out if request should be made (i.e. assign state)
       // first, check if we have a pending request to process
       // TODO: this design is tricky, think really really hard about it
-      if (!proc_ready_out)begin
+      if (state == PROC_HI)begin
         we <= proc_we;
-        data_in <= proc_data;
+        data_in <= proc_data[7:0];
         case (proc_type)
           PROC_MEM_TYPE_RAM: addr <= proc_addr;
           PROC_MEM_TYPE_REG: addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr;
@@ -176,6 +181,26 @@ module chip8_memory #(
           end
         endcase
         proc_ready_out <= 1;
+      // TODO: put VIDEO_HI, DEBUG_HI here too
+      end else if (!proc_ready_out)begin
+        we <= proc_we;
+        data_in <= proc_size ? proc_data[15:8] : proc_data[7:0];
+        case (proc_type)
+          PROC_MEM_TYPE_RAM: addr <= proc_addr;
+          PROC_MEM_TYPE_REG: addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr;
+          PROC_MEM_TYPE_STK: addr <= RAM_DEPTH + VRAM_DEPTH
+            + REG_DEPTH + proc_addr;
+          default: begin
+            // TODO: error
+          end
+        endcase
+        if (proc_size == 1)begin
+          proc_size <= 0;
+          proc_ready_out <= 0;
+          proc_addr <= proc_addr+1;
+        end else begin
+          proc_ready_out <= 1;
+        end
       end else if (!video_ready_out)begin
         we <= video_we;
         data_in <= video_data;
@@ -203,17 +228,31 @@ module chip8_memory #(
         debug_ready_out <= 1;
       end
       if (proc_ready_out && proc_valid_in)begin
-        if (!video_ready_out)begin
+        if (!video_ready_out || !debug_ready_out)begin
           // in this case something's already been written to we/addr, so we
           // stash the inputs for now
           proc_we <= proc_we_in;
           proc_data <= proc_data_in;
           proc_addr <= proc_addr_in;
+          proc_type <= proc_type_in;
+          proc_size <= proc_size_in;
           proc_ready_out <= 0;
         end else begin
           // otherwise, we can write directly
           we <= proc_we_in;
-          data_in <= proc_data_in;
+          if (proc_size_in)begin
+            data_in <= proc_data_in[2*WIDTH-1:WIDTH];
+
+            // save data
+            proc_we <= proc_we_in;
+            proc_data <= proc_data_in;
+            proc_addr <= proc_addr_in+1; // since we're doing the high byte now
+            proc_type <= proc_type_in;
+            proc_size <= 0; // since we're doing the high byte now
+            proc_ready_out <= 0;
+          end else begin
+            data_in <= proc_data_in[WIDTH-1:0];
+          end
           case (proc_type_in)
             PROC_MEM_TYPE_RAM: addr <= proc_addr_in;
             PROC_MEM_TYPE_REG: addr <= RAM_DEPTH + VRAM_DEPTH + proc_addr_in;
@@ -226,11 +265,12 @@ module chip8_memory #(
         end
       end
       if (video_ready_out && video_valid_in)begin
-        if (!proc_ready_out || proc_valid_in)begin
+        if (!proc_ready_out || !debug_ready_out || proc_valid_in)begin
           // stash
           video_we <= video_we_in;
           video_data <= video_data_in;
           video_addr <= video_addr_in;
+          video_type <= video_type_in;
           video_ready_out <= 0;
         end else begin
           we <= video_we_in;
@@ -252,6 +292,7 @@ module chip8_memory #(
           debug_we <= debug_we_in;
           debug_data <= debug_data_in;
           debug_addr <= debug_addr_in;
+          debug_type <= debug_type_in;
           debug_ready_out <= 0;
         end else begin
           we <= debug_we_in;
@@ -268,16 +309,21 @@ module chip8_memory #(
           endcase
         end
       end
-      // determine what to send out
-      proc_valid_out <= (state_out == PROC && !we_piped);
-      video_valid_out <= (state_out == VIDEO && !we_piped);
-      debug_valid_out <= (state_out == DEBUG && !we_piped);
+      if (state_out == PROC_HI)begin
+        data_hi <= data_lo;
+      end else if (last_state_out == PROC_LO)begin
+        // should handle fetching a word then a byte nicely
+        data_hi <= 0;
+      end
+      last_state_out <= state_out;
 
       // massive conditional for state
-      if (!proc_ready_out
-        || (video_ready_out && debug_ready_out && proc_valid_in)
-      )begin
-        state <= PROC;
+      if (state == PROC_HI)begin
+        state <= PROC_LO;
+      end else if (!proc_ready_out)begin
+        state <= proc_size ? PROC_HI : PROC_LO;
+      end else if (video_ready_out && debug_ready_out && proc_valid_in)begin
+        state <= proc_size_in ? PROC_HI : PROC_LO;
       end else if (!video_ready_out
         || (debug_ready_out && !proc_valid_in && video_valid_in)
       )begin
@@ -291,6 +337,15 @@ module chip8_memory #(
       end
     end
   end
+
+  always_comb begin
+    // determine what to send out
+    proc_valid_out = (state_out == PROC_LO && !we_piped);
+    video_valid_out = (state_out == VIDEO && !we_piped);
+    debug_valid_out = (state_out == DEBUG && !we_piped);
+  end
+
+  assign data_out = {data_hi, data_lo};
 
   // hdmi address conversion
   assign hdmi_addr = hdmi_addr_in + RAM_DEPTH;
@@ -307,7 +362,7 @@ module chip8_memory #(
       .ena(1'b1), // set to 0 to save power
       .regcea(1'b1),
       .rsta(rst_in),
-      .douta(data_out),
+      .douta(data_lo),
 
       // hdmi fetch
       .addrb(hdmi_addr),

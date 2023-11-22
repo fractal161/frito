@@ -15,7 +15,7 @@ module chip8_memory_tb;
   logic debug_we;
   logic debug_valid;
   logic [1:0] debug_type;
-  logic [7:0] data;
+  logic [15:0] data;
 
 
   // TODO: more than just debug

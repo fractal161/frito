@@ -7,7 +7,7 @@
 `define FPATH(X) `"data/X`"
 `endif  /* ! SYNTHESIS */
 
-module top_level(
+module top_level_2(
   input wire clk_100mhz, //crystal reference clock
   input wire [15:0] sw, //all 16 input slide switches
   input wire [3:0] btn, //all four momentary button switches

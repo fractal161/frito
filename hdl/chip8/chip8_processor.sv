@@ -20,7 +20,7 @@ module chip8_processor(
     input wire req_key_state_in,
 
     // data received from memory module
-    input wire [7:0] mem_data_in,
+    input wire [15:0] mem_data_in,
 
     // receive instruction/data from memory
     input wire mem_ready_in,
@@ -39,6 +39,7 @@ module chip8_processor(
     output logic mem_valid_out,
     output logic [7:0] mem_data_out,
     output logic [$clog2(PROC_MEM_TYPE_COUNT)-1:0] mem_type_out,
+    output logic mem_size_out,
 
     // sprite drawing info
     output logic draw_sprite_out,
@@ -162,12 +163,13 @@ module chip8_processor(
         FETCH: begin
           // TODO: optimize optimize optimize
           case (substate)
-            0: begin // fetch pc high
-              if (mem_ready_in)begin // fetch high pc
-                mem_addr_out <= REG_PC; // pc high
+            0: begin // fetch pc
+              if (mem_ready_in)begin
+                mem_addr_out <= REG_PC;
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
                 mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 1;
                 mem_received <= 0;
                 mem_sent <= 0;
                 substate <= substate + 1;
@@ -175,33 +177,14 @@ module chip8_processor(
                 mem_valid_out <= 0;
               end
             end
-            1: begin // wait for pc high, fetch pc low
-              if (!mem_sent && mem_ready_in)begin
-                mem_addr_out <= REG_PC+1; // pc low
-                mem_we_out <= 0;
-                mem_valid_out <= 1;
-                mem_type_out <= PROC_MEM_TYPE_REG;
-                mem_sent <= 1;
-              end else begin
-                mem_valid_out <= 0;
-              end
-
+            1: begin // wait for pc
               if (mem_valid_in)begin
-                pc[11:8] <= mem_data_in[3:0];
-                mem_received <= 1;
-              end
-              // if both actions have completed, proceed
-              if ((mem_valid_in|mem_received) && (mem_ready_in|mem_sent))begin
-                substate <= substate+1;
-              end
-            end
-            2: begin // wait for pc low, then fetch opcode high
-              if (mem_valid_in)begin
-                pc[7:0] <= mem_data_in;
-                mem_addr_out <= {pc[11:8], mem_data_in}; // opcode high
+                pc <= mem_data_in;
+                mem_addr_out <= mem_data_in[11:0];
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
                 mem_type_out <= PROC_MEM_TYPE_RAM;
+                mem_size_out <= 0;
 
                 mem_received <= 0;
                 mem_sent <= 0;
@@ -210,12 +193,13 @@ module chip8_processor(
                 mem_valid_out <= 0;
               end
             end
-            3: begin // wait for opcode high, fetch opcode low
+            2: begin // wait for opcode high, fetch opcode low
               if (!mem_sent && mem_ready_in)begin
                 mem_addr_out <= pc + 1; // opcode low
                 mem_we_out <= 0;
                 mem_valid_out <= 1;
                 mem_type_out <= PROC_MEM_TYPE_RAM;
+                mem_size_out <= 0;
                 mem_sent <= 1;
                 // now that opcode has been fully requested, increment pc here
                 pc <= pc + 2;
@@ -233,7 +217,7 @@ module chip8_processor(
                 substate <= substate+1;
               end
             end
-            4: begin // wait for opcode low
+            3: begin // wait for opcode low
               mem_valid_out <= 0;
               if (mem_valid_in)begin
                 opcode[7:0] <= mem_data_in;
@@ -323,6 +307,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -335,6 +320,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_STK;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -348,6 +334,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_STK;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -371,6 +358,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -396,6 +384,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -409,6 +398,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= pc[15:8];
                     mem_type_out <= PROC_MEM_TYPE_STK;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -421,6 +411,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= pc[7:0];
                     mem_type_out <= PROC_MEM_TYPE_STK;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -435,6 +426,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp + 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -454,6 +446,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -481,6 +474,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -508,6 +502,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -521,6 +516,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -558,6 +554,7 @@ module chip8_processor(
                 mem_valid_out <= 1;
                 mem_data_out <= opcode[7:0];
                 mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
                 state <= FINISH;
                 substate <= 0;
               end else begin
@@ -573,6 +570,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -585,6 +583,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in + opcode[7:0];
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -605,6 +604,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -617,6 +617,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -636,6 +637,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -649,6 +651,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -671,6 +674,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp | mem_data_in;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -690,6 +694,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -703,6 +708,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -725,6 +731,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp & mem_data_in;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -744,6 +751,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -757,6 +765,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -779,6 +788,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp ^ mem_data_in;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -798,6 +808,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -811,6 +822,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -834,6 +846,7 @@ module chip8_processor(
                     mem_data_out <= reg_tmp + mem_data_in;
                     reg_tmp <= (9'(reg_tmp) + 9'(mem_data_in) >= 9'h100);
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -846,6 +859,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -865,6 +879,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -878,6 +893,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -901,6 +917,7 @@ module chip8_processor(
                     mem_data_out <= mem_data_in - reg_tmp;
                     reg_tmp <= (mem_data_in > reg_tmp);
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -913,6 +930,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -933,6 +951,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -945,6 +964,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in >> 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                     reg_tmp <= mem_data_in[0];
                   end else begin
@@ -958,6 +978,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -977,6 +998,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -990,6 +1012,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1013,6 +1036,7 @@ module chip8_processor(
                     mem_data_out <= reg_tmp - mem_data_in;
                     reg_tmp <= (reg_tmp > mem_data_in);
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1025,6 +1049,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -1045,6 +1070,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1057,6 +1083,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in << 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                     reg_tmp <= mem_data_in[7];
                   end else begin
@@ -1070,6 +1097,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -1089,6 +1117,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -1102,6 +1131,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1141,6 +1171,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= 8'(opcode[11:8]);
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1153,6 +1184,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= opcode[7:0];
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -1172,6 +1204,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1206,6 +1239,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_received <= 0;
                     mem_sent <= 0;
                     substate <= substate + 1;
@@ -1219,6 +1253,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1241,6 +1276,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1263,6 +1299,7 @@ module chip8_processor(
                     mem_we_out <= 0;
                     mem_valid_out <= 1;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     mem_sent <= 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1304,6 +1341,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= 8'(collision_in);
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -1352,6 +1390,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= 0;
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     substate <= substate + 1;
                   end else begin
                     mem_valid_out <= 0;
@@ -1364,6 +1403,7 @@ module chip8_processor(
                     mem_valid_out <= 1;
                     mem_data_out <= (opcode[11:8] >> 2) + opcode[11:8];
                     mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -1402,6 +1442,7 @@ module chip8_processor(
                 mem_valid_out <= 1;
                 mem_data_out <= pc[15:8];
                 mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
                 substate <= substate + 1;
               end else begin
                 mem_valid_out <= 0;
@@ -1414,6 +1455,7 @@ module chip8_processor(
                 mem_valid_out <= 1;
                 mem_data_out <= pc[7:0];
                 mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
 
                 state <= IDLE;
                 substate <= 0;

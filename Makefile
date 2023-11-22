@@ -17,5 +17,5 @@ vidtest:
 	vvp sim/sim.out
 
 chiptest:
-	iverilog -g2012 -o sim/sim.out sim/chip8_tb.sv $(shell find hdl ! -name 'hdmi_clk_wiz.v' ! -name 'tmds_serializer.sv')
+	iverilog -g2012 -o sim/sim.out sim/chip8_tb.sv $(shell find hdl ! -name 'hdmi_clk_wiz.v' ! -name 'tmds_serializer.sv' ! -name 'audio_clk_wiz.v')
 	vvp sim/sim.out

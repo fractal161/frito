@@ -20,8 +20,8 @@ module top_level(
   output logic [2:0] rgb1, //rgb led
   output logic [2:0] hdmi_tx_p, //hdmi output signals (positives) (blue, green, red)
   output logic [2:0] hdmi_tx_n, //hdmi output signals (negatives) (blue, green, red)
-  output logic hdmi_clk_p, hdmi_clk_n //differential hdmi clock
-  //output logic spkl, spkr, //speaker outputs
+  output logic hdmi_clk_p, hdmi_clk_n, //differential hdmi clock
+  output logic spkl, spkr //speaker outputs
   );
 
   // TODO: this should be in chip8_params why is it not imported here
@@ -67,48 +67,49 @@ module top_level(
   logic chip8_clk;
   logic [17:0] chip8_clk_ctr;
   // actual counter
-  //always_ff @(posedge clk_100mhz_buf)begin
-  //  if (sys_rst)begin
-  //    chip8_clk <= 0;
-  //    chip8_clk_ctr <= 0;
-  //  end else begin
-  //    if (chip8_clk_ctr == CHIP8_CLK_RATIO-1) begin
-  //      chip8_clk <= 1;
-  //      chip8_clk_ctr <= 0;
-  //    end else begin
-  //      chip8_clk <= 0;
-  //      chip8_clk_ctr <= chip8_clk_ctr+1;
-  //    end
-  //  end
-  //end
-  // debug clock, for testing. btn[1] advances by a cycle
-  logic btn_held;
-  logic btn_pulse;
-  logic prev_btn_held;
-  `ifdef SYNTHESIS
-    localparam DEBOUNCE_TIME_MS = 5;
-  `else
-    localparam DEBOUNCE_TIME_MS = 0.000001;
-  `endif
-  debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) btn1_db(
-      .clk_in(clk_100mhz_buf),
-      .rst_in(sys_rst),
-      .dirty_in(btn[1]),
-      .clean_out(btn_held)
-    );
   always_ff @(posedge clk_100mhz_buf)begin
-    btn_pulse <= btn_held & !prev_btn_held;
-    prev_btn_held <= btn_held;
+    if (sys_rst)begin
+      chip8_clk <= 0;
+      chip8_clk_ctr <= 0;
+    end else begin
+      if (chip8_clk_ctr == CHIP8_CLK_RATIO-1) begin
+        chip8_clk <= 1;
+        chip8_clk_ctr <= 0;
+      end else begin
+        chip8_clk <= 0;
+        chip8_clk_ctr <= chip8_clk_ctr+1;
+      end
+    end
   end
-  assign chip8_clk = btn_pulse;
+  // debug clock, for testing. btn[1] advances by a cycle
+  //logic btn_held;
+  //logic btn_pulse;
+  //logic prev_btn_held;
+  //`ifdef SYNTHESIS
+  //  localparam DEBOUNCE_TIME_MS = 5;
+  //`else
+  //  localparam DEBOUNCE_TIME_MS = 0.000001;
+  //`endif
+  //debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) btn1_db(
+  //    .clk_in(clk_100mhz_buf),
+  //    .rst_in(sys_rst),
+  //    .dirty_in(btn[1]),
+  //    .clean_out(btn_held)
+  //  );
+  //always_ff @(posedge clk_100mhz_buf)begin
+  //  btn_pulse <= btn_held & !prev_btn_held;
+  //  prev_btn_held <= btn_held;
+  //end
+  //assign chip8_clk = btn_pulse;
 
-  logic [7:0] mem_data;
+  logic [15:0] mem_data;
 
   logic [11:0] proc_mem_addr;
   logic proc_mem_we;
   logic proc_mem_valid_req;
-  logic [7:0] proc_mem_data;
+  logic [15:0] proc_mem_data;
   logic [$clog2(PROC_MEM_TYPE_COUNT)-1:0] proc_mem_type;
+  logic proc_mem_size;
 
   logic proc_mem_ready;
   logic proc_mem_valid_res;
@@ -116,7 +117,7 @@ module top_level(
   logic [15:0] video_mem_addr;
   logic video_mem_we;
   logic video_mem_valid_req;
-  logic [7:0] video_mem_data;
+  logic [15:0] video_mem_data;
   logic [$clog2(VIDEO_MEM_TYPE_COUNT)-1:0] video_mem_type;
 
   logic video_mem_ready;
@@ -125,7 +126,7 @@ module top_level(
   logic [11:0] debug_mem_addr;
   logic debug_mem_we;
   logic debug_mem_valid_req;
-  logic [7:0] debug_mem_data;
+  logic [15:0] debug_mem_data;
   logic [$clog2(DEBUG_MEM_TYPE_COUNT)-1:0] debug_mem_type;
 
   logic debug_mem_ready;
@@ -157,6 +158,7 @@ module top_level(
       .proc_valid_in(proc_mem_valid_req),
       .proc_data_in(proc_mem_data),
       .proc_type_in(proc_mem_type),
+      .proc_size_in(proc_mem_size),
 
       .video_addr_in(video_mem_addr),
       .video_we_in(video_mem_we),
@@ -218,6 +220,7 @@ module top_level(
       .mem_valid_out(proc_mem_valid_req),
       .mem_data_out(proc_mem_data),
       .mem_type_out(proc_mem_type),
+      .mem_size_out(proc_mem_size),
 
       .draw_sprite_out(video_draw_sprite),
       .sprite_addr_out(video_sprite_addr),
