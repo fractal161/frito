@@ -357,15 +357,20 @@ module top_level(
       .fc_out(frame_count)
     );
 
-  logic hdmi_pixel_out;
+  logic [7:0] red, green, blue; //red green and blue pixel values for output
   video_multiplexer multiplexer1(
       .clk_in(clk_pixel),
       .rst_in(sys_rst),
       .hcount_in(hcount),
       .vcount_in(vcount),
+
+      .grid_in(1'b1),
+
       .hdmi_data_in(hdmi_mem_data),
       .hdmi_addr_out(hdmi_addr),
-      .hdmi_pixel_out(hdmi_pixel_out)
+      .hdmi_red_out(red),
+      .hdmi_green_out(green),
+      .hdmi_blue_out(blue)
     );
 
   // pipeline active_draw, hor_sync, vert_sync by 2 cycles
@@ -375,40 +380,12 @@ module top_level(
   logic hor_sync_piped;
   logic vert_sync_piped;
 
-  // probably should be depth 2, these numbers were from testing with the grid
-  pipeline #(.WIDTH(11), .DEPTH(4)) hcount_pipe(
-      .clk_in(clk_pixel),
-      .rst_in(sys_rst),
-      .val_in(hcount),
-      .val_out(hcount_piped)
-    );
-
-  pipeline #(.WIDTH(10), .DEPTH(4)) vcount_pipe(
-      .clk_in(clk_pixel),
-      .rst_in(sys_rst),
-      .val_in(vcount),
-      .val_out(vcount_piped)
-    );
-
   pipeline #(.WIDTH(3), .DEPTH(4)) video_signal_pipe(
       .clk_in(clk_pixel),
       .rst_in(sys_rst),
       .val_in({active_draw, hor_sync, vert_sync}),
       .val_out({active_draw_piped, hor_sync_piped, vert_sync_piped})
     );
-
-  logic [7:0] red, green, blue; //red green and blue pixel values for output
-
-  always_comb begin
-    red = hdmi_pixel_out ? 8'h7F : 8'h00;
-    green = hdmi_pixel_out ? 8'hFF : 8'h00;
-    blue = hdmi_pixel_out ? 8'hD4 : 8'h00;
-    if (hcount_piped[3:0] == 0 || vcount_piped[3:0] == 0)begin
-      red ^= 8'h40;
-      green ^= 8'h40;
-      blue ^= 8'h40;
-    end
-  end
 
   logic [9:0] tmds_10b [0:2]; //output of each TMDS encoder!
   logic tmds_signal [2:0]; //output of each TMDS serializer!

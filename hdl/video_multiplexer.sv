@@ -14,18 +14,25 @@ module video_multiplexer(
 
     input wire [7:0] hdmi_data_in,
 
+    // configuration
+    input wire grid_in,
+
     // value of pixel requested for hdmi display
     // (colors can be inferred in top_level)
     output logic [15:0] hdmi_addr_out,
-    output logic hdmi_pixel_out
+    output logic [7:0] hdmi_red_out,
+    output logic [7:0] hdmi_green_out,
+    output logic [7:0] hdmi_blue_out
   );
 
-  logic [5:0] chip8_x_out;
-  logic [4:0] chip8_y_out;
-  logic [2:0] chip8_x_byte;
-  logic [2:0] chip8_x_byte_piped;
   logic [2:0] left_offset;
   logic [2:0] left_offset_piped;
+
+  logic [10:0] x;
+  logic [10:0] x_piped;
+
+  logic [9:0] y;
+  logic [9:0] y_piped;
 
   pipeline #(.WIDTH(3), .DEPTH(2)) left_offset_pipe(
       .clk_in(clk_in),
@@ -34,14 +41,62 @@ module video_multiplexer(
       .val_out(left_offset_piped)
     );
 
+  pipeline #(.WIDTH(11), .DEPTH(2)) x_pipe(
+      .clk_in(clk_in),
+      .rst_in(rst_in),
+      .val_in(x),
+      .val_out(x_piped)
+    );
+
+  pipeline #(.WIDTH(10), .DEPTH(2)) y_pipe(
+      .clk_in(clk_in),
+      .rst_in(rst_in),
+      .val_in(y),
+      .val_out(y_piped)
+    );
+
+  always_comb begin
+  end
+
   always_ff @(posedge clk_in)begin
     // TODO: customize
     left_offset <= hcount_in[6:4];
-    hdmi_addr_out <= ({8'b00000000, vcount_in[8:4], hcount_in[9:7]}); // 2 cycle latency
-    if (hcount_in >= 16*64 || vcount_in >= 16*32) begin
-      hdmi_pixel_out <= 0;
+    hdmi_addr_out <= {
+      8'b00000000,
+      5'((vcount_in-104) >> 4),
+      3'((hcount_in-128) >> 7)
+    };
+    x <= hcount_in - 128;
+    y <= vcount_in - 104;
+  end
+
+  always_comb begin
+    // right/bottom of grid
+    if (grid_in && ((x_piped == 16*64 && y_piped <= 16*32)
+      || (x_piped <= 16*64 && y_piped == 16*32))
+    )begin
+      hdmi_red_out = 8'h40;
+      hdmi_green_out = 8'h40;
+      hdmi_blue_out = 8'h40;
+    end else if (x_piped >= 16*64 || y_piped >= 16*32)begin
+      hdmi_red_out = 0;
+      hdmi_green_out = 0;
+      hdmi_blue_out = 0;
     end else begin
-      hdmi_pixel_out <= (hdmi_data_in >> (7 - left_offset_piped)); // will take the LSB by default
+      if(!hdmi_data_in[7 - left_offset_piped])begin
+        hdmi_red_out = 0;
+        hdmi_green_out = 0;
+        hdmi_blue_out = 0;
+      end else begin
+        hdmi_red_out = 8'h7F;
+        hdmi_green_out = 8'hFF;
+        hdmi_blue_out = 8'hD4;
+      end
+      if (grid_in && (x_piped[3:0] == 0 || y_piped[3:0] == 0))begin
+        hdmi_red_out ^= 8'h40;
+        hdmi_green_out ^= 8'h40;
+        hdmi_blue_out ^= 8'h40;
+      end
     end
   end
 
