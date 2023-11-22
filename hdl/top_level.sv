@@ -1,11 +1,19 @@
 `timescale 1ns / 1ps
 `default_nettype none // prevents system from inferring an undeclared logic (good practice)
 
+//`define DEBUG
+
 `ifdef SYNTHESIS
 `define FPATH(X) `"X`"
 `else /* ! SYNTHESIS */
 `define FPATH(X) `"data/X`"
 `endif  /* ! SYNTHESIS */
+
+`ifndef DEBUG
+  `ifdef SYNTHESIS
+    `define NOT_DEBUG_AND_SYNTHESIS
+  `endif
+`endif
 
 module top_level(
   input wire clk_100mhz, //crystal reference clock
@@ -66,7 +74,7 @@ module top_level(
   // inline clock for simplicity
   logic chip8_clk;
   logic [17:0] chip8_clk_ctr;
-  `ifdef SYNTHESIS
+  `ifdef NOT_DEBUG_AND_SYNTHESIS
     // actual counter
     always_ff @(posedge clk_100mhz_buf)begin
       if (sys_rst)begin
@@ -151,7 +159,7 @@ module top_level(
   logic [7:0] hdmi_mem_data;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(test_rom1.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(test_flags.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),

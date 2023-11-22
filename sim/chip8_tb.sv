@@ -32,38 +32,15 @@ module chip8_tb;
     #20;
     btn_in = 0;
     #20;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
-    btn_in[1] = 1;
-    #10;
-    btn_in[1] = 0;
-    #5000;
+    for (int i = 0; i < 500; i=i+1)begin
+      if (i % 10 == 0)begin
+        $display("Cycles: %d", i);
+      end
+      btn_in[1] = 1;
+      #10;
+      btn_in[1] = 0;
+      #5000;
+    end
     $display("Simulation complete!");
     $finish;
   end

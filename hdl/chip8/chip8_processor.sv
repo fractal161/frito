@@ -15,9 +15,7 @@ module chip8_processor(
     input wire timer_decr_in,
 
     // different input states
-    input wire [3:0] any_key_in,
-    input wire valid_key_in,
-    input wire req_key_state_in,
+    input wire [15:0] key_state_in,
 
     // data received from memory module
     input wire [15:0] mem_data_in,
@@ -29,9 +27,6 @@ module chip8_processor(
     // results from video module
     input wire collision_in,
     input wire done_drawing_in,
-
-    // for asking input module for key
-    output logic [4:0] req_key_out,
 
     // common params for querying memory
     output logic [11:0] mem_addr_out,
@@ -65,7 +60,7 @@ module chip8_processor(
 
   logic [1:0] state;
   // tracks different steps within each main state
-  logic [4:0] substate;
+  logic [5:0] substate;
 
   // opcode types
   //localparam int SYS = 0; // 0nnn, (ignored by modern interpreters)
@@ -125,6 +120,8 @@ module chip8_processor(
 
   logic [11:0] sprite_addr;
   logic [5:0] sprite_x;
+
+  genvar i;
 
   always_ff @(posedge clk_in)begin
     // main logic
@@ -399,7 +396,7 @@ module chip8_processor(
                 end
                 1: begin // wait for Vx
                   if (mem_valid_in)begin
-                    if (mem_data_in == opcode[7:0])begin
+                    if (mem_data_in[7:0] == opcode[7:0])begin
                       pc <= pc + 2;
                     end
                     state <= FINISH;
@@ -427,7 +424,7 @@ module chip8_processor(
                 end
                 1: begin // wait for Vx
                   if (mem_valid_in)begin
-                    if (mem_data_in != opcode[7:0])begin
+                    if (mem_data_in[7:0] != opcode[7:0])begin
                       pc <= pc + 2;
                     end
                     state <= FINISH;
@@ -716,7 +713,7 @@ module chip8_processor(
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in[15:8] - mem_data_in[7:0];
-                    reg_tmp <= (mem_data_in[15:8] > mem_data_in[7:0]);
+                    reg_tmp <= (mem_data_in[15:8] >= mem_data_in[7:0]);
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
                     substate <= substate + 1;
@@ -811,7 +808,7 @@ module chip8_processor(
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in[7:0] - mem_data_in[15:8];
-                    reg_tmp <= (mem_data_in[7:0] > mem_data_in[15:8]);
+                    reg_tmp <= (mem_data_in[7:0] >= mem_data_in[15:8]);
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
                     substate <= substate + 1;
@@ -1050,20 +1047,158 @@ module chip8_processor(
               endcase
             end
             SKP: begin // Ex9E
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vx
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // check if key is pressed
+                  if (mem_valid_in)begin
+                    if (mem_data_in < 8'h0F
+                      && key_state_in[mem_data_in[3:0]]
+                    )begin
+                      pc <= pc + 2;
+                    end
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             SKNP: begin // ExA1
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch Vx
+                  if (mem_ready_in)begin
+                    mem_addr_out <= 12'(opcode[11:8]); // Vx
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // check if key is pressed
+                  if (mem_valid_in)begin
+                    if (mem_data_in < 8'h0F
+                      && !key_state_in[mem_data_in[3:0]]
+                    )begin
+                      pc <= pc + 2;
+                    end
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_RDT: begin // Fx07
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch dt
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_DT;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // write value to Vx
+                  if (mem_valid_in)begin
+                    mem_addr_out <= opcode[11:8];
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_KEY: begin // Fx0A
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin
+                  if (key_state_in != 0)begin
+                    // honestly too tired to figure out how to do this right
+                    if (key_state_in[0])begin
+                      reg_tmp <= 0;
+                    end else if (key_state_in[1])begin
+                      reg_tmp <= 1;
+                    end else if (key_state_in[2])begin
+                      reg_tmp <= 2;
+                    end else if (key_state_in[3])begin
+                      reg_tmp <= 3;
+                    end else if (key_state_in[4])begin
+                      reg_tmp <= 4;
+                    end else if (key_state_in[5])begin
+                      reg_tmp <= 5;
+                    end else if (key_state_in[6])begin
+                      reg_tmp <= 6;
+                    end else if (key_state_in[7])begin
+                      reg_tmp <= 7;
+                    end else if (key_state_in[8])begin
+                      reg_tmp <= 8;
+                    end else if (key_state_in[9])begin
+                      reg_tmp <= 9;
+                    end else if (key_state_in[10])begin
+                      reg_tmp <= 10;
+                    end else if (key_state_in[11])begin
+                      reg_tmp <= 11;
+                    end else if (key_state_in[12])begin
+                      reg_tmp <= 12;
+                    end else if (key_state_in[13])begin
+                      reg_tmp <= 13;
+                    end else if (key_state_in[14])begin
+                      reg_tmp <= 14;
+                    end else begin
+                      reg_tmp <= 15;
+                    end
+                    substate <= substate+1;
+                  end else begin
+                    pc <= pc-2;
+                    state <= FINISH;
+                    substate <= 0;
+                  end
+                end
+                1: begin // write to Vx
+                  if (mem_ready_in)begin
+                    mem_addr_out <= opcode[11:8];
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_WDT: begin // Fx15
               state <= FINISH;
@@ -1074,8 +1209,64 @@ module chip8_processor(
               substate <= 0;
             end
             ADD_I: begin // Fx1E
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch I
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_I;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 1;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // fetch Vx
+                  if (mem_valid_in)begin
+                    addr_tmp <= mem_data_in;
+                    mem_addr_out <= opcode[11:8];
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                2: begin // write high byte of I+Vx
+                  if (mem_valid_in)begin
+                    addr_tmp <= addr_tmp + mem_data_in;
+                    mem_addr_out <= REG_I;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= (addr_tmp + mem_data_in) >> 8;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                3: begin // write low byte of I+Vx
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_I+1;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= addr_tmp[7:0];
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_SPR: begin // Fx29
               case (substate)
@@ -1113,16 +1304,221 @@ module chip8_processor(
               endcase
             end
             LD_BCD: begin // Fx33
-              state <= FINISH;
-              substate <= 0;
+              case (substate)
+                0: begin // fetch I
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_I;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 1;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // fetch Vx
+                  if (mem_valid_in)begin
+                    addr_tmp <= mem_data_in;
+                    mem_addr_out <= opcode[11:8];
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                2: begin // write hundreds digit
+                  if (mem_valid_in)begin
+                    mem_addr_out <= addr_tmp;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    if (mem_data_in[7:0] >= 8'd200)begin
+                      mem_data_out <= 8'd2;
+                      reg_tmp <= mem_data_in[7:0] - 8'd200;
+                    end else if (mem_data_in[7:0] >= 8'd100)begin
+                      mem_data_out <= 8'd1;
+                      reg_tmp <= mem_data_in[7:0] - 8'd100;
+                    end else begin
+                      mem_data_out <= 8'd0;
+                      reg_tmp <= mem_data_in[7:0];
+                    end
+                    mem_type_out <= PROC_MEM_TYPE_RAM;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                3: begin // write tens digit
+                  if (mem_ready_in)begin
+                    mem_addr_out <= addr_tmp+1;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    if (reg_tmp >= 8'd90)begin
+                      mem_data_out <= 8'd9;
+                      reg_tmp <= reg_tmp - 8'd90;
+                    end else if (reg_tmp >= 8'd80)begin
+                      mem_data_out <= 8'd8;
+                      reg_tmp <= reg_tmp - 8'd80;
+                    end else if (reg_tmp >= 8'd70)begin
+                      mem_data_out <= 8'd7;
+                      reg_tmp <= reg_tmp - 8'd70;
+                    end else if (reg_tmp >= 8'd60)begin
+                      mem_data_out <= 8'd6;
+                      reg_tmp <= reg_tmp - 8'd60;
+                    end else if (reg_tmp >= 8'd50)begin
+                      mem_data_out <= 8'd5;
+                      reg_tmp <= reg_tmp - 8'd50;
+                    end else if (reg_tmp >= 8'd40)begin
+                      mem_data_out <= 8'd4;
+                      reg_tmp <= reg_tmp - 8'd40;
+                    end else if (reg_tmp >= 8'd30)begin
+                      mem_data_out <= 8'd3;
+                      reg_tmp <= reg_tmp - 8'd30;
+                    end else if (reg_tmp >= 8'd20)begin
+                      mem_data_out <= 8'd2;
+                      reg_tmp <= reg_tmp - 8'd20;
+                    end else if (reg_tmp >= 8'd10)begin
+                      mem_data_out <= 8'd1;
+                      reg_tmp <= reg_tmp - 8'd10;
+                    end else begin
+                      mem_data_out <= 8'd0;
+                      reg_tmp <= reg_tmp;
+                    end
+                    mem_type_out <= PROC_MEM_TYPE_RAM;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                4: begin // write ones digit
+                  if (mem_ready_in)begin
+                    mem_addr_out <= addr_tmp+2;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= reg_tmp;
+                    mem_type_out <= PROC_MEM_TYPE_RAM;
+                    mem_size_out <= 0;
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                default: begin
+                  error_out <= ERR_EXEC;
+                end
+              endcase
             end
             LD_WREG: begin // Fx55
-              state <= FINISH;
-              substate <= 0;
+              if (substate == 0)begin
+                // fetch I
+                if (mem_ready_in)begin
+                  mem_addr_out <= REG_I;
+                  mem_we_out <= 0;
+                  mem_valid_out <= 1;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 1;
+                  substate <= substate + 1;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else if (substate == 1)begin
+                // store I
+                if (mem_valid_in)begin
+                  addr_tmp <= mem_data_in;
+                  substate <= substate + 1;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else if (!substate[0])begin
+                // fetch register substate[5:1]-1
+                if (mem_ready_in)begin
+                  mem_addr_out <= 4'(substate[5:1]-1);
+                  mem_we_out <= 0;
+                  mem_valid_out <= 1;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 0;
+                  substate <= substate + 1;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else begin
+                // store at mem location addr + substate[5:1]-1
+                if (mem_valid_in)begin
+                  mem_addr_out <= addr_tmp + 4'(substate[5:1]-1);
+                  mem_we_out <= 1;
+                  mem_valid_out <= 1;
+                  mem_data_out <= mem_data_in;
+                  mem_type_out <= PROC_MEM_TYPE_RAM;
+                  mem_size_out <= 0;
+                  if (4'(substate[5:1]-1) == opcode[11:8])begin
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    substate <= substate + 1;
+                  end
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end
             end
             LD_RREG: begin // Fx65
-              state <= FINISH;
-              substate <= 0;
+              if (substate == 0)begin
+                // fetch I
+                if (mem_ready_in)begin
+                  mem_addr_out <= REG_I;
+                  mem_we_out <= 0;
+                  mem_valid_out <= 1;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 1;
+                  substate <= substate + 1;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else if (substate == 1)begin
+                // store I
+                if (mem_valid_in)begin
+                  addr_tmp <= mem_data_in;
+                  substate <= substate + 1;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else if (!substate[0])begin
+                // fetch mem location addr + substate[5:1]-1
+                if (mem_ready_in)begin
+                  mem_addr_out <= addr_tmp + 4'(substate[5:1]-1);
+                  mem_we_out <= 0;
+                  mem_valid_out <= 1;
+                  mem_type_out <= PROC_MEM_TYPE_RAM;
+                  mem_size_out <= 0;
+                  substate <= substate + 1;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else begin
+                // store at register substate[5:1]-1
+                if (mem_valid_in)begin
+                  mem_addr_out <= 4'(substate[5:1]-1);
+                  mem_we_out <= 1;
+                  mem_data_out <= mem_data_in;
+                  mem_valid_out <= 1;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 0;
+                  if (4'(substate[5:1]-1) == opcode[11:8])begin
+                    state <= FINISH;
+                    substate <= 0;
+                  end else begin
+                    substate <= substate + 1;
+                  end
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end
             end
             default: begin
               error_out <= ERR_PARSE;

@@ -38,7 +38,7 @@ module video_multiplexer(
     // TODO: customize
     left_offset <= hcount_in[6:4];
     hdmi_addr_out <= ({8'b00000000, vcount_in[8:4], hcount_in[9:7]}); // 2 cycle latency
-    if (hcount_in > 16*64 || vcount_in > 16*32) begin
+    if (hcount_in >= 16*64 || vcount_in >= 16*32) begin
       hdmi_pixel_out <= 0;
     end else begin
       hdmi_pixel_out <= (hdmi_data_in >> (7 - left_offset_piped)); // will take the LSB by default
