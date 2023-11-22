@@ -66,41 +66,44 @@ module top_level(
   // inline clock for simplicity
   logic chip8_clk;
   logic [17:0] chip8_clk_ctr;
-  // actual counter
-  always_ff @(posedge clk_100mhz_buf)begin
-    if (sys_rst)begin
-      chip8_clk <= 0;
-      chip8_clk_ctr <= 0;
-    end else begin
-      if (chip8_clk_ctr == CHIP8_CLK_RATIO-1) begin
-        chip8_clk <= 1;
+  `ifdef SYNTHESIS
+    // actual counter
+    always_ff @(posedge clk_100mhz_buf)begin
+      if (sys_rst)begin
+        chip8_clk <= 0;
         chip8_clk_ctr <= 0;
       end else begin
-        chip8_clk <= 0;
-        chip8_clk_ctr <= chip8_clk_ctr+1;
+        if (chip8_clk_ctr == CHIP8_CLK_RATIO-1) begin
+          chip8_clk <= 1;
+          chip8_clk_ctr <= 0;
+        end else begin
+          chip8_clk <= 0;
+          chip8_clk_ctr <= chip8_clk_ctr+1;
+        end
       end
     end
-  end
-  // debug clock, for testing. btn[1] advances by a cycle
-  //logic btn_held;
-  //logic btn_pulse;
-  //logic prev_btn_held;
-  //`ifdef SYNTHESIS
-  //  localparam DEBOUNCE_TIME_MS = 5;
-  //`else
-  //  localparam DEBOUNCE_TIME_MS = 0.000001;
-  //`endif
-  //debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) btn1_db(
-  //    .clk_in(clk_100mhz_buf),
-  //    .rst_in(sys_rst),
-  //    .dirty_in(btn[1]),
-  //    .clean_out(btn_held)
-  //  );
-  //always_ff @(posedge clk_100mhz_buf)begin
-  //  btn_pulse <= btn_held & !prev_btn_held;
-  //  prev_btn_held <= btn_held;
-  //end
-  //assign chip8_clk = btn_pulse;
+  `else
+    // debug clock, for testing. btn[1] advances by a cycle
+    logic btn_held;
+    logic btn_pulse;
+    logic prev_btn_held;
+    `ifdef SYNTHESIS
+      localparam DEBOUNCE_TIME_MS = 5;
+    `else
+      localparam DEBOUNCE_TIME_MS = 0.000001;
+    `endif
+    debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) btn1_db(
+        .clk_in(clk_100mhz_buf),
+        .rst_in(sys_rst),
+        .dirty_in(btn[1]),
+        .clean_out(btn_held)
+      );
+    always_ff @(posedge clk_100mhz_buf)begin
+      btn_pulse <= btn_held & !prev_btn_held;
+      prev_btn_held <= btn_held;
+    end
+    assign chip8_clk = btn_pulse;
+  `endif
 
   logic [15:0] mem_data;
 
