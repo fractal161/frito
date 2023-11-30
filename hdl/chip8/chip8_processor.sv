@@ -121,12 +121,20 @@ module chip8_processor(
   logic [11:0] sprite_addr;
   logic [5:0] sprite_x;
 
-  genvar i;
+  logic [15:0] seed;
+  logic [15:0] random;
+  lfsr_16 lfsr (
+      .clk_in(clk_in),
+      .rst_in(rst_in),
+      .seed_in(seed),
+      .q_out(random)
+    );
 
   always_ff @(posedge clk_in)begin
     // main logic
     if (rst_in)begin
       state <= IDLE;
+      seed <= 16'h8988;
       substate <= 0;
       pc <= 16'h0;
       //sp <= 0;
@@ -975,8 +983,17 @@ module chip8_processor(
               endcase
             end
             RND: begin // Cxkk
-              state <= FINISH;
-              substate <= 0;
+              // write random & kk to Vx
+              if (mem_ready_in)begin
+                mem_addr_out <= opcode[11:8];
+                mem_we_out <= 1;
+                mem_valid_out <= 1;
+                mem_data_out <= random[7:0] & opcode[7:0];
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
+                state <= FINISH;
+                substate <= 0;
+              end
             end
             DRW: begin // Dxyn
               // display n-byte sprite defined at memory location I
