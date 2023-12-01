@@ -19,6 +19,8 @@ module top_level(
   input wire clk_100mhz, //crystal reference clock
   input wire [15:0] sw, //all 16 input slide switches
   input wire [3:0] btn, //all four momentary button switches
+  input wire [7:0] pmoda, //rows of matrix keypad
+  output logic [7:0] pmodb, //cols of matrix keypad
   output logic [15:0] led, //16 green output LEDs (located right above switches)
   output logic [3:0] ss0_an,//anode control for upper four digits of seven-seg display
   output logic [3:0] ss1_an,//anode control for lower four digits of seven-seg display
@@ -74,6 +76,11 @@ module top_level(
   // inline clock for simplicity
   logic chip8_clk;
   logic [17:0] chip8_clk_ctr;
+  `ifdef SYNTHESIS
+    localparam DEBOUNCE_TIME_MS = 5;
+  `else
+    localparam DEBOUNCE_TIME_MS = 0.000001;
+  `endif
   `ifdef NOT_DEBUG_AND_SYNTHESIS
     // actual counter
     always_ff @(posedge clk_100mhz_buf)begin
@@ -95,11 +102,6 @@ module top_level(
     logic btn_held;
     logic btn_pulse;
     logic prev_btn_held;
-    `ifdef SYNTHESIS
-      localparam DEBOUNCE_TIME_MS = 5;
-    `else
-      localparam DEBOUNCE_TIME_MS = 0.000001;
-    `endif
     debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) btn1_db(
         .clk_in(clk_100mhz_buf),
         .rst_in(sys_rst),
@@ -158,6 +160,9 @@ module top_level(
   logic [15:0] hdmi_addr;
   logic [7:0] hdmi_mem_data;
 
+  logic [15:0] keys;
+  logic [15:0] keys_db; // debounced
+
   // TODO: fill out params as needed
   chip8_memory #(.FILE(`FPATH(octojam2title.mem))) mem(
       .clk_in(clk_100mhz_buf),
@@ -199,10 +204,28 @@ module top_level(
       .hdmi_data_out(hdmi_mem_data)
     );
 
-  //chip8_input keys (
-  //    .clk_in(clk_100mhz_buf),
-  //    .rst_in(sys_rst)
-  //  );
+  chip8_input input_module (
+    .clk_in(clk_100mhz_buf),
+    .rst_in(sys_rst),
+    .row_vals(pmoda[3:0]),
+    .col_vals(pmodb[3:0]),
+    .key_pressed_out(keys)
+    );
+
+
+  genvar i;
+  generate
+    for (i = 0; i < 16; i=i+1)begin : g_keypad
+      debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) keypad_db(
+          .clk_in(clk_100mhz_buf),
+          .rst_in(sys_rst),
+          .dirty_in(keys[i]),
+          .clean_out(keys_db[i])
+        );
+    end
+  endgenerate
+
+  assign led = keys_db;
 
   chip8_processor processor (
       .clk_in(clk_100mhz_buf),
@@ -212,6 +235,7 @@ module top_level(
 
       .active_in(1'b1), // TODO: replace
       //.timer_decr_in(),
+      .key_state_in(keys_db),
 
       //.any_key_in(),
       //.valid_key_in(),

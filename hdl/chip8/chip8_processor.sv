@@ -130,6 +130,8 @@ module chip8_processor(
       .q_out(random)
     );
 
+  logic pending_timer_decr;
+
   always_ff @(posedge clk_in)begin
     // main logic
     if (rst_in)begin
@@ -1553,13 +1555,69 @@ module chip8_processor(
                 mem_data_out <= pc;
                 mem_type_out <= PROC_MEM_TYPE_REG;
                 mem_size_out <= 1;
-                state <= IDLE;
-                substate <= 0;
+                if (pending_timer_decr)begin
+                  substate <= substate+1;
+                end else begin
+                  state <= IDLE;
+                  substate <= 0;
+                end
               end else begin
                 mem_valid_out <= 0;
               end
             end
-            // TODO: decrement counters here
+            1: begin // fetch delay timer
+              if (mem_ready_in)begin
+                mem_addr_out <= REG_DT;
+                mem_we_out <= 0;
+                mem_valid_out <= 1;
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
+                substate <= substate+1;
+              end else begin
+                mem_valid_out <= 0;
+              end
+            end
+            2: begin // write delay timer
+              if (mem_valid_in)begin
+                mem_addr_out <= REG_DT;
+                mem_we_out <= 1;
+                mem_valid_out <= 1;
+                mem_data_out <= (mem_data_in == 0) ? 0 : mem_data_in-1;
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
+                substate <= substate+1;
+              end else begin
+                mem_valid_out <= 0;
+              end
+            end
+            3: begin // fetch sound timer
+              if (mem_ready_in)begin
+                mem_addr_out <= REG_ST;
+                mem_we_out <= 0;
+                mem_valid_out <= 1;
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
+                substate <= substate+1;
+              end else begin
+                mem_valid_out <= 0;
+              end
+            end
+            4: begin // write sound timer, set audio playback
+              if (mem_valid_in)begin
+                mem_addr_out <= REG_ST;
+                mem_we_out <= 1;
+                mem_valid_out <= 1;
+                mem_data_out <= (mem_data_in == 0) ? 0 : mem_data_in-1;
+                mem_type_out <= PROC_MEM_TYPE_REG;
+                mem_size_out <= 0;
+                state <= IDLE;
+                substate <= 0;
+
+                active_audio_out <= (mem_data_in > 1);
+              end else begin
+                mem_valid_out <= 0;
+              end
+            end
             default: begin
               error_out <= ERR_STATE;
             end
@@ -1572,12 +1630,13 @@ module chip8_processor(
     end
   end
   // handle timers independently
-  //always_ff @(posedge clk_in)begin
-  //  if (timer_decr_in)begin
+  always_ff @(posedge clk_in)begin
+    if (timer_decr_in)begin
+      pending_timer_decr <= 1;
   //    delay_timer <= delay_timer == 0 ? 0 : delay_timer - 1;
   //    sound_timer <= sound_timer == 0 ? 0 : sound_timer - 1;
-  //  end
-  //end
+    end
+  end
   //assign active_audio_out = sound_timer > 0;
 
 endmodule // processor
