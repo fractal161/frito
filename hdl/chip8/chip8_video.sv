@@ -70,7 +70,9 @@ module chip8_video(
           if (clear_buffer_in) begin
             state <= CLEARING;
             clear_pos <= 0;
+            collision_out <= 0;
           end else if (draw_sprite_in && sprite_height_in > 0) begin
+            collision_out <= 0;
             sprite_addr <= sprite_addr_in;
             sprite_pos_x <= sprite_x_in;
             left_byte <= (sprite_x_in >> 3);
@@ -83,7 +85,6 @@ module chip8_video(
           draw_offset <= 0;
           drawing_state <= 0;
           updating_line <= 0;
-          collision_out <= 0;
           done_drawing_out <= draw_sprite_in && (sprite_height_in == 0);
           mem_valid_out <= 0;
         end
@@ -123,7 +124,7 @@ module chip8_video(
             3: begin // receive left buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
-                collision_out <= collision_out || (|(updating_line[15:8] & mem_data_in));
+                collision_out <= collision_out | (|(updating_line[15:8] & mem_data_in));
 
                 updating_line[15:8] <= updating_line[15:8] ^ mem_data_in; // XOR!
                 drawing_state <= drawing_state + 1;
@@ -141,7 +142,7 @@ module chip8_video(
             5: begin // receive right buffer byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
-                collision_out <= collision_out || (|(updating_line[7:0] & mem_data_in));
+                collision_out <= collision_out | (|(updating_line[7:0] & mem_data_in));
 
                 updating_line[7:0] <= updating_line[7:0] ^ mem_data_in; // XOR!
                 drawing_state <= drawing_state + 1;

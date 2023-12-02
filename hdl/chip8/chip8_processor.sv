@@ -414,6 +414,7 @@ module chip8_processor(
                   end
                 end
                 1: begin // wait for Vx
+                  mem_valid_out <= 0;
                   if (mem_valid_in)begin
                     if (mem_data_in[7:0] == opcode[7:0])begin
                       pc <= pc + 2;
@@ -442,6 +443,7 @@ module chip8_processor(
                   end
                 end
                 1: begin // wait for Vx
+                  mem_valid_out <= 0;
                   if (mem_valid_in)begin
                     if (mem_data_in[7:0] != opcode[7:0])begin
                       pc <= pc + 2;
@@ -470,6 +472,7 @@ module chip8_processor(
                   end
                 end
                 1: begin // compare Vx and Vy
+                  mem_valid_out <= 0;
                   if (mem_valid_in)begin
                     if (mem_data_in[15:8] == mem_data_in[7:0])begin
                       pc <= pc + 2;
@@ -917,6 +920,7 @@ module chip8_processor(
                   end
                 end
                 1: begin // wait for Vx, then compare Vx and Vy
+                  mem_valid_out <= 0;
                   if (mem_valid_in)begin
                     if (mem_data_in[15:8] != mem_data_in[7:0])begin
                       pc <= pc + 2;
@@ -1005,6 +1009,7 @@ module chip8_processor(
                 state <= FINISH;
                 substate <= 0;
               end
+              mem_valid_out <= 0;
             end
             DRW: begin // Dxyn
               // display n-byte sprite defined at memory location I
@@ -1050,6 +1055,7 @@ module chip8_processor(
                   end
                 end
                 3: begin
+                  mem_valid_out <= 0;
                   if (done_drawing_in)begin
                     substate <= substate+1;
                   end
@@ -1089,8 +1095,9 @@ module chip8_processor(
                   end
                 end
                 1: begin // check if key is pressed
+                  mem_valid_out <= 0;
                   if (mem_valid_in)begin
-                    if (mem_data_in < 8'h0F
+                    if (mem_data_in <= 8'h0F
                       && key_state_in[mem_data_in[3:0]]
                     )begin
                       pc <= pc + 2;
@@ -1120,13 +1127,15 @@ module chip8_processor(
                 end
                 1: begin // check if key is pressed
                   if (mem_valid_in)begin
-                    if (mem_data_in < 8'h0F
+                    if (mem_data_in < 8'h10
                       && !key_state_in[mem_data_in[3:0]]
                     )begin
                       pc <= pc + 2;
                     end
                     state <= FINISH;
                     substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
                   end
                 end
                 default: begin
@@ -1158,6 +1167,8 @@ module chip8_processor(
                     mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
                   end
                 end
                 default: begin
@@ -1168,6 +1179,7 @@ module chip8_processor(
             LD_KEY: begin // Fx0A
               case (substate)
                 0: begin
+                  mem_valid_out <= 0;
                   if (key_state_in != 0)begin
                     // honestly too tired to figure out how to do this right
                     if (key_state_in[0])begin
@@ -1253,6 +1265,8 @@ module chip8_processor(
                     mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
                   end
                 end
                 default: begin
@@ -1284,6 +1298,8 @@ module chip8_processor(
                     mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
+                  end else begin
+                    mem_valid_out <= 0;
                   end
                 end
                 default: begin
