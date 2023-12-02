@@ -162,9 +162,10 @@ module top_level(
 
   logic [15:0] keys;
   logic [15:0] keys_db; // debounced
+  logic clk_60hz;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(octojam2title.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(octojam1title.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
@@ -234,7 +235,7 @@ module top_level(
       .chip8_clk_in(chip8_clk),
 
       .active_in(1'b1), // TODO: replace
-      //.timer_decr_in(),
+      .timer_decr_in(clk_60hz),
       .key_state_in(keys_db),
 
       //.any_key_in(),
@@ -303,9 +304,9 @@ module top_level(
 
   // DEBUG stuff
 
-  logic debug_ff;
+  //logic debug_ff;
 
-  assign led[0] = debug_ff;
+  //assign led[0] = debug_ff;
 
   localparam int DEBUG_CLK_RATIO = 1_000_000;
   logic [27:0] debug_clk_ctr;
@@ -380,6 +381,17 @@ module top_level(
       .nf_out(new_frame),
       .fc_out(frame_count)
     );
+
+  logic [1:0] clk_60hz_tmp;
+
+  always @(posedge clk_pixel)begin
+    if (sys_rst) begin
+      clk_60hz_tmp <= 0;
+      clk_60hz <= 0;
+    end else begin
+      {clk_60hz, clk_60hz_tmp} <= {clk_60hz_tmp, new_frame};
+    end
+  end
 
   logic [7:0] red, green, blue; //red green and blue pixel values for output
   video_multiplexer multiplexer1(

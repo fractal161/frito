@@ -16,13 +16,14 @@ module chip8_processor_tb;
   logic [11:0] proc_addr;
   logic proc_we;
   logic proc_valid_req;
-  logic [7:0] proc_data;
+  logic [15:0] proc_data;
   logic [1:0] proc_type;
+  logic proc_size;
 
   logic proc_ready;
   logic proc_valid_res;
 
-  logic [7:0] data;
+  logic [15:0] data;
 
 
   chip8_processor uut(
@@ -39,7 +40,8 @@ module chip8_processor_tb;
       .mem_we_out(proc_we),
       .mem_valid_out(proc_valid_req),
       .mem_data_out(proc_data),
-      .mem_type_out(proc_type)
+      .mem_type_out(proc_type),
+      .mem_size_out(proc_size)
     );
 
   chip8_memory #(.FILE("data/ibm.mem")) mem(
@@ -54,6 +56,7 @@ module chip8_processor_tb;
       .proc_valid_in(proc_valid_req),
       .proc_data_in(proc_data),
       .proc_type_in(proc_type),
+      .proc_size_in(proc_size),
 
       .proc_ready_out(proc_ready),
       .proc_valid_out(proc_valid_res),
