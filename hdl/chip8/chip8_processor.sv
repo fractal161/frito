@@ -1185,13 +1185,13 @@ module chip8_processor(
                   if (keys_released != 0)begin
                     // honestly too tired to figure out how to do this right
                     if (keys_released[0])begin
-                      reg_tmp <= 1;
+                      reg_tmp <= 0;
                     end else if (keys_released[1])begin
-                      reg_tmp <= 2;
+                      reg_tmp <= 1;
                     end else if (keys_released[2])begin
-                      reg_tmp <= 3;
+                      reg_tmp <= 2;
                     end else if (keys_released[3])begin
-                      reg_tmp <= 12;
+                      reg_tmp <= 3;
                     end else if (keys_released[4])begin
                       reg_tmp <= 4;
                     end else if (keys_released[5])begin
@@ -1199,21 +1199,21 @@ module chip8_processor(
                     end else if (keys_released[6])begin
                       reg_tmp <= 6;
                     end else if (keys_released[7])begin
-                      reg_tmp <= 13;
-                    end else if (keys_released[8])begin
                       reg_tmp <= 7;
-                    end else if (keys_released[9])begin
+                    end else if (keys_released[8])begin
                       reg_tmp <= 8;
-                    end else if (keys_released[10])begin
+                    end else if (keys_released[9])begin
                       reg_tmp <= 9;
-                    end else if (keys_released[11])begin
-                      reg_tmp <= 14;
-                    end else if (keys_released[12])begin
+                    end else if (keys_released[10])begin
                       reg_tmp <= 10;
-                    end else if (keys_released[13])begin
-                      reg_tmp <= 0;
-                    end else if (keys_released[14])begin
+                    end else if (keys_released[11])begin
                       reg_tmp <= 11;
+                    end else if (keys_released[12])begin
+                      reg_tmp <= 12;
+                    end else if (keys_released[13])begin
+                      reg_tmp <= 13;
+                    end else if (keys_released[14])begin
+                      reg_tmp <= 14;
                     end else begin
                       reg_tmp <= 15;
                     end

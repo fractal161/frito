@@ -21,6 +21,26 @@ module chip8_input(
   localparam READING = 1;
 
   logic [15:0] key_pressed_vals;
+  logic [15:0] full_key_state;
+
+  always_comb begin
+    key_pressed_out[0] = full_key_state[13];
+    key_pressed_out[1] = full_key_state[0];
+    key_pressed_out[2] = full_key_state[1];
+    key_pressed_out[3] = full_key_state[2];
+    key_pressed_out[4] = full_key_state[4];
+    key_pressed_out[5] = full_key_state[5];
+    key_pressed_out[6] = full_key_state[6];
+    key_pressed_out[7] = full_key_state[8];
+    key_pressed_out[8] = full_key_state[9];
+    key_pressed_out[9] = full_key_state[10];
+    key_pressed_out[10] = full_key_state[12];
+    key_pressed_out[11] = full_key_state[14];
+    key_pressed_out[12] = full_key_state[3];
+    key_pressed_out[13] = full_key_state[7];
+    key_pressed_out[14] = full_key_state[11];
+    key_pressed_out[15] = full_key_state[15];
+  end
 
   always_ff @(posedge clk_in) begin
         if (rst_in) begin
@@ -32,7 +52,7 @@ module chip8_input(
             case (polling_state)
                 0: begin
                     // Output is from the previous polling cycle
-                    key_pressed_out <= key_pressed_vals;
+                    full_key_state <= key_pressed_vals;
                     key_pressed_vals <= 0;
 
                     col_vals <= 4'b1110;
