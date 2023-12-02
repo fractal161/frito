@@ -117,6 +117,9 @@ module chip8_processor(
   logic [15:0] pc; // program counter
   //logic [7:0] sp; // stack pointer
   //logic [15:0] stack [16];
+  logic [15:0] old_key_state;
+  logic [15:0] keys_released;
+  assign keys_released = old_key_state & (~key_state_in);
 
   logic [11:0] sprite_addr;
   logic [5:0] sprite_x;
@@ -140,7 +143,6 @@ module chip8_processor(
       pending_timer_decr <= pending_timer_decr | timer_decr_in;
     end
   end
-
   always_ff @(posedge clk_in)begin
     // main logic
     if (rst_in)begin
@@ -1180,39 +1182,38 @@ module chip8_processor(
             LD_KEY: begin // Fx0A
               case (substate)
                 0: begin
-                  mem_valid_out <= 0;
-                  if (key_state_in != 0)begin
+                  if (keys_released != 0)begin
                     // honestly too tired to figure out how to do this right
-                    if (key_state_in[0])begin
-                      reg_tmp <= 0;
-                    end else if (key_state_in[1])begin
+                    if (keys_released[0])begin
                       reg_tmp <= 1;
-                    end else if (key_state_in[2])begin
+                    end else if (keys_released[1])begin
                       reg_tmp <= 2;
-                    end else if (key_state_in[3])begin
+                    end else if (keys_released[2])begin
                       reg_tmp <= 3;
-                    end else if (key_state_in[4])begin
-                      reg_tmp <= 4;
-                    end else if (key_state_in[5])begin
-                      reg_tmp <= 5;
-                    end else if (key_state_in[6])begin
-                      reg_tmp <= 6;
-                    end else if (key_state_in[7])begin
-                      reg_tmp <= 7;
-                    end else if (key_state_in[8])begin
-                      reg_tmp <= 8;
-                    end else if (key_state_in[9])begin
-                      reg_tmp <= 9;
-                    end else if (key_state_in[10])begin
-                      reg_tmp <= 10;
-                    end else if (key_state_in[11])begin
-                      reg_tmp <= 11;
-                    end else if (key_state_in[12])begin
+                    end else if (keys_released[3])begin
                       reg_tmp <= 12;
-                    end else if (key_state_in[13])begin
+                    end else if (keys_released[4])begin
+                      reg_tmp <= 4;
+                    end else if (keys_released[5])begin
+                      reg_tmp <= 5;
+                    end else if (keys_released[6])begin
+                      reg_tmp <= 6;
+                    end else if (keys_released[7])begin
                       reg_tmp <= 13;
-                    end else if (key_state_in[14])begin
+                    end else if (keys_released[8])begin
+                      reg_tmp <= 7;
+                    end else if (keys_released[9])begin
+                      reg_tmp <= 8;
+                    end else if (keys_released[10])begin
+                      reg_tmp <= 9;
+                    end else if (keys_released[11])begin
                       reg_tmp <= 14;
+                    end else if (keys_released[12])begin
+                      reg_tmp <= 10;
+                    end else if (keys_released[13])begin
+                      reg_tmp <= 0;
+                    end else if (keys_released[14])begin
+                      reg_tmp <= 11;
                     end else begin
                       reg_tmp <= 15;
                     end
@@ -1723,6 +1724,9 @@ module chip8_processor(
         end
       endcase
     end
+  end
+  always_ff @(posedge clk_in)begin
+    old_key_state <= key_state_in;
   end
   //assign active_audio_out = sound_timer > 0;
 
