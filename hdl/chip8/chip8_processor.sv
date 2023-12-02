@@ -1008,8 +1008,9 @@ module chip8_processor(
                 mem_size_out <= 0;
                 state <= FINISH;
                 substate <= 0;
+              end else begin
+                mem_valid_out <= 0;
               end
-              mem_valid_out <= 0;
             end
             DRW: begin // Dxyn
               // display n-byte sprite defined at memory location I
