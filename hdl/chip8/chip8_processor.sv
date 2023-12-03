@@ -1371,26 +1371,38 @@ module chip8_processor(
             end
             LD_SPR: begin // Fx29
               case (substate)
-                0: begin // write to I
+                0: begin // fetch Vx
                   if (mem_ready_in)begin
+                    mem_addr_out <= opcode[11:8];
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin // write to I
+                  if (mem_valid_in)begin
+                    reg_tmp <= mem_data_in[7:0];
                     mem_addr_out <= REG_I; // Ih
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
                     mem_data_out <= 0;
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
-                    state <= FINISH;
-                    substate <= 0;
+                    substate <= substate+1;
                   end else begin
                     mem_valid_out <= 0;
                   end
                 end
-                1: begin
+                2: begin
                   if (mem_ready_in)begin
                     mem_addr_out <= REG_I+1; // Ih
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
-                    mem_data_out <= (8'(opcode[11:8]) >> 2) + opcode[11:8];
+                    mem_data_out <= (reg_tmp >> 2) + reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
                     state <= FINISH;
