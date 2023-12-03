@@ -20,8 +20,8 @@ module top_level(
   output logic [2:0] rgb1, //rgb led
   output logic [2:0] hdmi_tx_p, //hdmi output signals (positives) (blue, green, red)
   output logic [2:0] hdmi_tx_n, //hdmi output signals (negatives) (blue, green, red)
-  output logic hdmi_clk_p, hdmi_clk_n //differential hdmi clock
   output logic spkl, spkr, //speaker outputs
+  output logic hdmi_clk_p, hdmi_clk_n //differential hdmi clock
   );
 
   // TODO: this should be in chip8_params why is it not imported here
@@ -231,11 +231,20 @@ module top_level(
       //.error_out()
     );
 
-  //chip8_audio audio (
-  //    .clk_in(clk_100mhz_buf),
-  //    .rst_in(sys_rst)
-  //  );
+  logic audio_out;
 
+  chip8_audio audio (
+     .clk_in(clk_100mhz_buf),
+     .rst_in(sys_rst),
+     .active_in(1),
+     .timbre_in(sw[1:0]),
+     .pitch_in(750),
+     .vol_in(sw[15:13]),
+     .level_out(audio_out)
+   );
+
+  assign spkl = audio_out;
+  assign spkr = audio_out;
 
   chip8_video video (
       .clk_in(clk_100mhz_buf),

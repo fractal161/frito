@@ -2,26 +2,28 @@
 `default_nettype none // prevents system from inferring an undeclared logic (good practice)
 
 //Sine Wave Generator
-module square_generator #(
-  parameter PHASE_INCR = 32'b1000_0000_0000_0000_0000_0000_0000_0000>>1) (
+module square_generator (
   input wire clk_in,
   input wire rst_in, //clock and reset
   input wire step_in, //trigger a phase step (rate at which you run sine generator)
+  input wire [9:0] tone_in,
   output logic signed [7:0] amp_out); //output phase in 2's complement
 
   // parameter PHASE_INCR = 32'b1000_0000_0000_0000_0000_0000_0000_0000>>3; //1/16th of 12 khz is 750 Hz
   logic [31:0] phase;
   logic [7:0] amp;
   logic [7:0] amp_pre;
+  logic [31:0] phase_incr;
   assign amp_pre = ({~amp[7],amp[6:0]}); //2's comp output (if not scaling)
   assign amp_out = amp_pre>>>4; //decrease volume so it isn't too loud!
   square_lut lut_2(.clk_in(clk_in), .phase_in(phase[31:26]), .amp_out(amp));
+  tone_lut tlut_2(.tone(tone_in), .phase_out(phase_incr));
 
   always_ff @(posedge clk_in)begin
     if (rst_in)begin
       phase <= 32'b0;
     end else if (step_in)begin
-      phase <= phase+PHASE_INCR;
+      phase <= phase+phase_incr;
     end
   end
 endmodule
