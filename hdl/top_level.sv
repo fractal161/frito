@@ -160,7 +160,7 @@ module top_level(
   logic [15:0] hdmi_addr;
   logic [7:0] hdmi_mem_data;
 
-  logic [15:0] keys;
+  logic [15:0] input_keys;
   logic [15:0] keys_db; // debounced
   logic clk_60hz;
 
@@ -210,9 +210,11 @@ module top_level(
     .rst_in(sys_rst),
     .row_vals(pmoda[3:0]),
     .col_vals(pmodb[3:0]),
-    .key_pressed_out(keys)
+    .key_pressed_out(input_keys)
     );
 
+  logic [15:0] keys;
+  assign keys = sw;
 
   genvar i;
   generate
@@ -227,6 +229,9 @@ module top_level(
   endgenerate
 
   assign led = keys_db;
+
+  logic active_audio;
+  logic audio_out;
 
   chip8_processor processor (
       .clk_in(clk_100mhz_buf),
@@ -264,18 +269,17 @@ module top_level(
       .sprite_y_out(video_sprite_y),
       .sprite_height_out(video_sprite_height),
 
-      .clear_buffer_out(video_clear_buffer)
+      .clear_buffer_out(video_clear_buffer),
 
-      //.active_audio_out(),
+      .active_audio_out(active_audio)
       //.error_out()
     );
 
-  logic audio_out;
 
   chip8_audio audio (
      .clk_in(clk_100mhz_buf),
      .rst_in(sys_rst),
-     .active_in(1),
+     .active_in(active_audio),
      .timbre_in(sw[1:0]),
      //.pitch_in(750),
      .vol_in(sw[15:13]),

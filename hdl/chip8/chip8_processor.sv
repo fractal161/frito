@@ -117,9 +117,9 @@ module chip8_processor(
   logic [15:0] pc; // program counter
   //logic [7:0] sp; // stack pointer
   //logic [15:0] stack [16];
-  logic [15:0] old_key_state;
+  logic [15:0] keys_just_pressed;
   logic [15:0] keys_released;
-  assign keys_released = old_key_state & (~key_state_in);
+  assign keys_released = keys_just_pressed & (~key_state_in);
 
   logic [11:0] sprite_addr;
   logic [5:0] sprite_x;
@@ -160,6 +160,8 @@ module chip8_processor(
       clear_buffer_out <= 0;
       draw_sprite_out <= 0;
       active_audio_out <= 0;
+
+      keys_just_pressed <= 0;
     end else if (active_in)begin
       // main state machine goes here. states are as follows:
       // - idle (wait until chip8_clk_in)
@@ -1182,6 +1184,7 @@ module chip8_processor(
             LD_KEY: begin // Fx0A
               case (substate)
                 0: begin
+                  keys_just_pressed <= keys_just_pressed | key_state_in;
                   if (keys_released != 0)begin
                     // honestly too tired to figure out how to do this right
                     if (keys_released[0])begin
@@ -1225,6 +1228,7 @@ module chip8_processor(
                   end
                 end
                 1: begin // write to Vx
+                  keys_just_pressed <= 0;
                   if (mem_ready_in)begin
                     mem_addr_out <= opcode[11:8];
                     mem_we_out <= 1;
@@ -1736,9 +1740,6 @@ module chip8_processor(
         end
       endcase
     end
-  end
-  always_ff @(posedge clk_in)begin
-    old_key_state <= key_state_in;
   end
   //assign active_audio_out = sound_timer > 0;
 
