@@ -1445,7 +1445,7 @@ module chip8_processor(
                     mem_addr_out <= REG_I+1; // Ih
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
-                    mem_data_out <= (reg_tmp >> 2) + reg_tmp;
+                    mem_data_out <= (reg_tmp << 2) + reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
                     state <= FINISH;
