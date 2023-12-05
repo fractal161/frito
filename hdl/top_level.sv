@@ -165,7 +165,7 @@ module top_level(
   logic clk_60hz;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(key_test.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(quirks.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),

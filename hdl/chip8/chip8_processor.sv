@@ -595,6 +595,19 @@ module chip8_processor(
                     mem_data_out <= mem_data_in[15:8] | mem_data_in[7:0];
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                2: begin // write 0 to VF
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_VF;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= 0;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -628,6 +641,19 @@ module chip8_processor(
                     mem_data_out <= mem_data_in[15:8] & mem_data_in[7:0];
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                2: begin // write 0 to VF
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_VF;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= 0;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -659,6 +685,19 @@ module chip8_processor(
                     mem_we_out <= 1;
                     mem_valid_out <= 1;
                     mem_data_out <= mem_data_in[15:8] ^ mem_data_in[7:0];
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate+1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                2: begin // write 0 to VF
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_VF;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= 0;
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
                     state <= FINISH;
@@ -1545,17 +1584,39 @@ module chip8_processor(
                   mem_valid_out <= 0;
                 end
               end else if (substate == 1)begin
-                // store I
+                // store I, write high byte of I+x+1
                 if (mem_valid_in)begin
                   addr_tmp <= mem_data_in;
+
+                  mem_addr_out <= REG_I;
+                  mem_we_out <= 1;
+                  mem_valid_out <= 1;
+                  mem_data_out <= (mem_data_in+opcode[11:8]+1) >> 8;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 0;
+
                   substate <= substate + 1;
                 end else begin
                   mem_valid_out <= 0;
                 end
-              end else if (!substate[0])begin
-                // fetch register substate[5:1]-1
+              end else if (substate == 2)begin
+                // write low byte of I+x+1
                 if (mem_ready_in)begin
-                  mem_addr_out <= 4'(substate[5:1]-1);
+                  mem_addr_out <= REG_I+1;
+                  mem_we_out <= 1;
+                  mem_valid_out <= 1;
+                  mem_data_out <= 8'(addr_tmp+opcode[11:8]+1);
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 0;
+
+                  substate <= 4;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else if (!substate[0])begin
+                // fetch register substate[5:1]-2
+                if (mem_ready_in)begin
+                  mem_addr_out <= 4'(substate[5:1]-2);
                   mem_we_out <= 0;
                   mem_valid_out <= 1;
                   mem_type_out <= PROC_MEM_TYPE_REG;
@@ -1565,15 +1626,15 @@ module chip8_processor(
                   mem_valid_out <= 0;
                 end
               end else begin
-                // store at mem location addr + substate[5:1]-1
+                // store at mem location addr + substate[5:1]-2
                 if (mem_valid_in)begin
-                  mem_addr_out <= addr_tmp + 4'(substate[5:1]-1);
+                  mem_addr_out <= addr_tmp + 4'(substate[5:1]-2);
                   mem_we_out <= 1;
                   mem_valid_out <= 1;
                   mem_data_out <= mem_data_in;
                   mem_type_out <= PROC_MEM_TYPE_RAM;
                   mem_size_out <= 0;
-                  if (4'(substate[5:1]-1) == opcode[11:8])begin
+                  if (4'(substate[5:1]-2) == opcode[11:8])begin
                     state <= FINISH;
                     substate <= 0;
                   end else begin
@@ -1598,17 +1659,39 @@ module chip8_processor(
                   mem_valid_out <= 0;
                 end
               end else if (substate == 1)begin
-                // store I
+                // store I, write high byte of I+x+1
                 if (mem_valid_in)begin
                   addr_tmp <= mem_data_in;
+
+                  mem_addr_out <= REG_I;
+                  mem_we_out <= 1;
+                  mem_valid_out <= 1;
+                  mem_data_out <= (mem_data_in+opcode[11:8]+1) >> 8;
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 0;
+
                   substate <= substate + 1;
                 end else begin
                   mem_valid_out <= 0;
                 end
-              end else if (!substate[0])begin
-                // fetch mem location addr + substate[5:1]-1
+              end else if (substate == 2)begin
+                // write low byte of I+x+1
                 if (mem_ready_in)begin
-                  mem_addr_out <= addr_tmp + 4'(substate[5:1]-1);
+                  mem_addr_out <= REG_I+1;
+                  mem_we_out <= 1;
+                  mem_valid_out <= 1;
+                  mem_data_out <= 8'(addr_tmp+opcode[11:8]+1);
+                  mem_type_out <= PROC_MEM_TYPE_REG;
+                  mem_size_out <= 0;
+
+                  substate <= 4;
+                end else begin
+                  mem_valid_out <= 0;
+                end
+              end else if (!substate[0])begin
+                // fetch mem location addr + substate[5:1]-2
+                if (mem_ready_in)begin
+                  mem_addr_out <= addr_tmp + 4'(substate[5:1]-2);
                   mem_we_out <= 0;
                   mem_valid_out <= 1;
                   mem_type_out <= PROC_MEM_TYPE_RAM;
@@ -1618,15 +1701,15 @@ module chip8_processor(
                   mem_valid_out <= 0;
                 end
               end else begin
-                // store at register substate[5:1]-1
+                // store at register substate[5:1]-2
                 if (mem_valid_in)begin
-                  mem_addr_out <= 4'(substate[5:1]-1);
+                  mem_addr_out <= 4'(substate[5:1]-2);
                   mem_we_out <= 1;
                   mem_data_out <= mem_data_in;
                   mem_valid_out <= 1;
                   mem_type_out <= PROC_MEM_TYPE_REG;
                   mem_size_out <= 0;
-                  if (4'(substate[5:1]-1) == opcode[11:8])begin
+                  if (4'(substate[5:1]-2) == opcode[11:8])begin
                     state <= FINISH;
                     substate <= 0;
                   end else begin
