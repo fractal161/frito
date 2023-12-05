@@ -1027,8 +1027,8 @@ module chip8_processor(
                   end
                 end
                 1: begin
-                  if (mem_ready_in)begin // write relative pc address
-                    pc <= mem_data_in + opcode[11:0];
+                  if (mem_valid_in)begin // write relative pc address
+                    pc <= mem_data_in[7:0] + opcode[11:0];
                     state <= FINISH;
                     substate <= 0;
                   end else begin
