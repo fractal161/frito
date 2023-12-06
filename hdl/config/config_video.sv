@@ -16,22 +16,21 @@ module config_video(
     input wire [10:0] hcount_in,
     input wire [9:0] vcount_in,
 
+    input wire [7:0] tile_row_in,
+    input wire [7:0] buf_read_data_in,
+
     input wire [10:0] ptr_x_in,
     input wire [9:0] ptr_y_in,
     // TODO: inputs defining current menu state (i.e. what to show)
-    output logic [23:0] pixel_out
+    output logic [23:0] pixel_out,
+
+    output logic [11:0] tile_addr_out,
+    output logic [9:0] buf_read_addr_out
   );
-  localparam int WIDTH = 8;
-  localparam int DEPTH = 8*256 + 40*23;
 
   localparam int PIPE_DEPTH = 3;
 
-  logic [11:0] addr;
-  logic [10:0] tile_addr;
   logic [2:0] tile_row_index;
-
-  logic [7:0] tile_type;
-  logic [7:0] tile_row;
 
   logic [10:0] hcount_pipe[PIPE_DEPTH-1:0];
   logic [9:0] vcount_pipe[PIPE_DEPTH-1:0];
@@ -58,12 +57,11 @@ module config_video(
 
   always_comb begin
     // 2048 + 40 * (vcount_in >> 5) + (hcount_in >> 5)
-    addr = 2048
-        + (vcount_in[9:5] << 5)
+    buf_read_addr_out = (vcount_in[9:5] << 5)
         + (vcount_in[9:5] << 3)
         + hcount_in[10:5];
     tile_row_index = vcount_pipe[0][4:2]; // TODO: check pipeline
-    tile_addr = (tile_type << 3) + tile_row_index;
+    tile_addr_out = (buf_read_data_in << 3) + tile_row_index;
   end
 
   always_ff @(posedge clk_in)begin
@@ -73,7 +71,7 @@ module config_video(
       // fetch
       if (hcount_pipe[2][4:0] == 0 || vcount_pipe[2][4:0] == 0)begin
         pixel_out <= 24'h404040;
-      end else if (tile_row[7-hcount_pipe[2][4:2]])begin // TODO: check pipeline
+      end else if (tile_row_in[7-hcount_pipe[2][4:2]])begin // TODO: check pipeline
         pixel_out <= 24'hFFFFFF;
       end else begin
         pixel_out <= 24'h000000;
@@ -81,31 +79,6 @@ module config_video(
     end
   end
 
-  // fetches tile type, then uses that to fetch the row of interest
-  xilinx_true_dual_port_read_first_2_clock_ram #(
-      .RAM_WIDTH(WIDTH),
-      .RAM_DEPTH(DEPTH),
-      .INIT_FILE(`FPATH(cfg.mem))
-    ) memory (
-      .addra(addr), // TODO: correct addr
-      .clka(clk_in),
-      .wea(1'b0), // write-enable
-      .dina(8'b0), // data_in
-      .ena(1'b1), // set to 0 to save power
-      .regcea(1'b1),
-      .rsta(rst_in),
-      .douta(tile_type),
-
-      // hdmi fetch
-      .addrb(tile_addr), // TODO: correct addr
-      .clkb(clk_in),
-      .web(1'b0), // write-enable (hdmi should never write to ram)
-      .dinb(8'b0), // read only, so unnecessary
-      .enb(1'b1), // set to 0 to save power
-      .regceb(1'b1),
-      .rstb(rst_in),
-      .doutb(tile_row)
-    );
 endmodule
 
 `default_nettype wire

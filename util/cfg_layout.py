@@ -403,7 +403,9 @@ chars = [
 ]
 
 chars.extend(0 for _ in range(8*(256 - len(charmap))))
-byte_list = [f'{c:02x}' for c in chars]
-byte_list.extend(f'{charmap.index(c):02x}' for c in buffer)
-with open('data/cfg.mem', 'w') as f:
-    f.write(' '.join(byte_list))
+cfg_data = [f'{c:02x}' for c in chars]
+cfg_buffer = [f'{charmap.index(c):02x}' for c in buffer]
+with open('data/cfg_data.mem', 'w') as f:
+    f.write(' '.join(cfg_data))
+with open('data/cfg_buffer.mem', 'w') as f:
+    f.write(' '.join(cfg_buffer))

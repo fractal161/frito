@@ -432,12 +432,48 @@ module top_level(
     );
 
   logic [23:0] config_pixel;
-  config_video confiv_video(
+
+  wire [11:0] tile_addr;
+  logic [11:0] menu_addr;
+
+  wire buf_read_valid;
+  wire [9:0] buf_read_addr;
+
+  logic [7:0] tile_row;
+  logic [7:0] menu_tile;
+  logic [7:0] buf_tile;
+
+  config_video config_vid(
       .clk_in(clk_pixel),
       .rst_in(sys_rst),
       .hcount_in(hcount),
       .vcount_in(vcount),
-      .pixel_out(config_pixel)
+
+      .tile_row_in(tile_row),
+      .buf_read_data_in(buf_tile),
+
+      .pixel_out(config_pixel),
+
+      .tile_addr_out(tile_addr),
+      .buf_read_addr_out(buf_read_addr)
+    );
+
+  config_memory config_mem(
+      .clk_in(clk_pixel),
+      .rst_in(sys_rst),
+
+      .tile_addr_in(tile_addr),
+      .menu_addr_in(menu_addr),
+
+      //.buf_write_valid_in(),
+      //.buf_write_addr_in(),
+      //.buf_write_data_in(),
+
+      .buf_read_addr_in(buf_read_addr),
+
+      .tile_row_out(tile_row),
+      .menu_tile_out(menu_tile),
+      .buf_tile_out(buf_tile)
     );
 
   always_comb begin
