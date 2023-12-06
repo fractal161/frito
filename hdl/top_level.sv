@@ -165,7 +165,7 @@ module top_level(
   logic clk_60hz;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(quirks.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(key_test.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
@@ -214,7 +214,7 @@ module top_level(
     );
 
   logic [15:0] keys;
-  assign keys = sw;
+  assign keys = input_keys;
 
   genvar i;
   generate
@@ -233,13 +233,20 @@ module top_level(
   logic active_audio;
   logic audio_out;
 
+  logic active_processor;
+  always_ff @(posedge clk_100mhz_buf)begin
+    if (sys_rst)begin
+      active_processor <= 0; // TODO: don't forget to set
+    end
+  end
+
   chip8_processor processor (
       .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
 
       .chip8_clk_in(chip8_clk),
 
-      .active_in(1'b1), // TODO: replace
+      .active_in(active_processor), // TODO: replace
       .timer_decr_in(clk_60hz),
       .key_state_in(keys_db),
 
@@ -397,6 +404,7 @@ module top_level(
 
   logic [1:0] clk_60hz_tmp;
 
+  // 60hz clock fifo
   always @(posedge clk_pixel)begin
     if (sys_rst) begin
       clk_60hz_tmp <= 0;
@@ -407,6 +415,7 @@ module top_level(
   end
 
   logic [7:0] red, green, blue; //red green and blue pixel values for output
+  logic [7:0] chip8_red, chip8_green, chip8_blue; //red green and blue pixel values for output
   video_multiplexer multiplexer1(
       .clk_in(clk_pixel),
       .rst_in(sys_rst),
@@ -417,10 +426,25 @@ module top_level(
 
       .hdmi_data_in(hdmi_mem_data),
       .hdmi_addr_out(hdmi_addr),
-      .hdmi_red_out(red),
-      .hdmi_green_out(green),
-      .hdmi_blue_out(blue)
+      .hdmi_red_out(chip8_red),
+      .hdmi_green_out(chip8_green),
+      .hdmi_blue_out(chip8_blue)
     );
+
+  logic [23:0] config_pixel;
+  config_video confiv_video(
+      .clk_in(clk_pixel),
+      .rst_in(sys_rst),
+      .hcount_in(hcount),
+      .vcount_in(vcount),
+      .pixel_out(config_pixel)
+    );
+
+  always_comb begin
+    red = active_processor ? chip8_red : config_pixel[23:16];
+    green = active_processor ? chip8_green : config_pixel[15:8];
+    blue = active_processor ? chip8_blue : config_pixel[7:0];
+  end
 
   // pipeline active_draw, hor_sync, vert_sync by 2 cycles
   logic [10:0] hcount_piped;
