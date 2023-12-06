@@ -14,8 +14,8 @@ module chip8_video(
     // sprite drawing info
     input wire draw_sprite_in,
     input wire [15:0] sprite_addr_in,
-    input wire [5:0] sprite_x_in,
-    input wire [4:0] sprite_y_in,
+    input wire [8:0] sprite_x_in,
+    input wire [8:0] sprite_y_in,
     input wire [3:0] sprite_height_in, // 1 to 15
 
     input wire clear_buffer_in,
@@ -53,6 +53,7 @@ module chip8_video(
   logic [2:0] left_byte;
   logic [2:0] right_byte;
   logic [2:0] left_offset;
+  logic [2:0] ignore_right; // how much of the right to chop off
 
   logic [3:0] sprite_height;
 
@@ -74,12 +75,19 @@ module chip8_video(
           end else if (draw_sprite_in && sprite_height_in > 0) begin
             collision_out <= 0;
             sprite_addr <= sprite_addr_in;
-            sprite_pos_x <= sprite_x_in;
-            left_byte <= (sprite_x_in >> 3);
-            right_byte <= (sprite_x_in >> 3)+1; // does wrap-around
+            sprite_pos_x <= sprite_x_in[5:0];
+            sprite_pos_y <= sprite_y_in[4:0];
+            left_byte <= (sprite_x_in[5:0] >> 3);
+            right_byte <= (sprite_x_in[5:0] >> 3)+1; // does wrap-around
             left_offset <= sprite_x_in[2:0]; // equivalent to mod 8
-            sprite_pos_y <= sprite_y_in;
             sprite_height <= sprite_height_in;
+
+            if (sprite_x_in[5:0] > 55) begin
+              ignore_right <= 3'(sprite_x_in[5:0]-56);
+            end else begin
+              ignore_right <= 0;
+            end
+
             state <= DRAWING;
           end
           draw_offset <= 0;
@@ -106,7 +114,7 @@ module chip8_video(
             1: begin // recieve sprite byte
               mem_valid_out <= 0;
               if (mem_valid_in) begin
-                updating_line <= ({mem_data_in, 8'b00000000}) >> left_offset;
+                updating_line <= ({((mem_data_in >> ignore_right) << ignore_right), 8'b00000000}) >> left_offset;
                 drawing_state <= drawing_state + 1;
               end
             end
@@ -169,7 +177,7 @@ module chip8_video(
                 mem_addr_out <= {8'b00000000, 5'(sprite_pos_y + draw_offset), right_byte};
 
                 // Check if there is another line to draw
-                if (draw_offset < sprite_height-1) begin
+                if ((draw_offset < sprite_height-1) && (sprite_pos_y+draw_offset < 31)) begin
                   draw_offset <= draw_offset + 1;
                   drawing_state <= 0;
                 end else begin
