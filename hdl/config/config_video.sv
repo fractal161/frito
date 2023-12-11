@@ -21,7 +21,7 @@ module config_video(
     output logic [9:0] buf_read_addr_out
   );
 
-  localparam int PIPE_DEPTH = 3;
+  localparam int PIPE_DEPTH = 4;
 
   logic [2:0] tile_row_index;
 
@@ -55,30 +55,31 @@ module config_video(
   always_comb begin
     //in_cursor = 0;
     if ((
-      ptr_index_in < 8
-      && hcount_pipe[2][10:5] == 6'h1
-      && vcount_pipe[2][9:5] == 5'(3+(ptr_index_in << 1))
+      ptr_index_in < 4'h8
+      && hcount_pipe[3][10:5] == 6'h1
+      && vcount_pipe[3][9:5] == 5'(3+(5'(ptr_index_in) << 1))
     ) || (
-      ptr_index_in < 12
-      && hcount_pipe[2][10:5] == 6'd21
-      && vcount_pipe[2][9:5] == 5'(3+((ptr_index_in-8) << 1))
+      ptr_index_in >= 4'h8
+      && ptr_index_in < 4'hC
+      && hcount_pipe[3][10:5] == 6'd21
+      && vcount_pipe[3][9:5] == 5'(3+((5'(ptr_index_in-4'h8)) << 1))
     ) || (
-      ptr_index_in == 12
-      && hcount_pipe[2][10:5] == 6'd16
-      && vcount_pipe[2][9:5] == 5'd20
+      ptr_index_in == 4'hC
+      && hcount_pipe[3][10:5] == 6'd16
+      && vcount_pipe[3][9:5] == 5'd20
     ))begin
-      in_cursor = cursor[(6'(vcount_pipe[2][4:2])<<3)+6'(hcount_pipe[2][4:2])];
+      in_cursor = cursor[(6'(vcount_pipe[3][4:2])<<3)+6'(hcount_pipe[3][4:2])];
     end else begin
       in_cursor = 0;
     end
   end
 
   always_comb begin
-    // 2048 + 40 * (vcount_in >> 5) + (hcount_in >> 5)
+    // 40 * (vcount_in >> 5) + (hcount_in >> 5)
     buf_read_addr_out = (vcount_in[9:5] << 5)
         + (vcount_in[9:5] << 3)
         + hcount_in[10:5];
-    tile_row_index = vcount_pipe[0][4:2]; // TODO: check pipeline
+    tile_row_index = vcount_pipe[1][4:2]; // TODO: check pipeline
     tile_addr_out = (buf_read_data_in << 3) + tile_row_index;
   end
 
@@ -87,11 +88,12 @@ module config_video(
       pixel_out <= 24'h000000;
     end else begin
       // fetch
-      if (hcount_pipe[2][4:0] == 0 || vcount_pipe[2][4:0] == 0)begin
-        pixel_out <= 24'h444444;
-      end else if(in_cursor)begin
+      //if (hcount_pipe[3][4:0] == 0 || vcount_pipe[3][4:0] == 0)begin
+      //  pixel_out <= 24'h444444;
+      //end else if(in_cursor)begin
+      if (in_cursor)begin
         pixel_out <= 24'hFFFFFF;
-      end else if (tile_row_in[7-hcount_pipe[2][4:2]])begin
+      end else if (tile_row_in[7-hcount_pipe[3][4:2]])begin
         pixel_out <= 24'hFFFFFF;
       end else begin
         pixel_out <= 24'h000000;

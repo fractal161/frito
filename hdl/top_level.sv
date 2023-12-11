@@ -227,13 +227,13 @@ module top_level(
       debouncer #(.DEBOUNCE_TIME_MS(DEBOUNCE_TIME_MS)) keypad_db(
           .clk_in(clk_100mhz_buf),
           .rst_in(sys_rst),
-          .dirty_in(keys[i]),
+          .dirty_in(keys[i]), // TODO: fix
           .clean_out(keys_db[i])
         );
     end
   endgenerate
 
-  // assign led = keys_db;
+  assign led = keys_db;
 
   logic active_audio;
   logic audio_out;
@@ -362,7 +362,8 @@ module top_level(
   seven_segment_controller ssc(
       .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
-      .val_in(debug_data),
+      //.val_in(debug_data),
+      .val_in(ptr_index),
       .cat_out(ss_c),
       .an_out({ss0_an, ss1_an})
     );
@@ -445,11 +446,19 @@ module top_level(
   logic pitch;
   logic [2:0] vol;
 
+  logic config_write_valid;
+  logic [9:0] config_write_addr;
+  logic [7:0] config_write_data;
+
   config_state config_state(
-      .clk_in(clk_100mhz_buf),
+      .clk_in(clk_pixel),
       .rst_in(sys_rst),
 
       .key_state_in(keys_db),
+
+      .write_valid_out(config_write_valid),
+      .write_addr_out(config_write_addr),
+      .write_data_out(config_write_data),
 
       .ptr_index_out(ptr_index),
       .active_processor_out(active_processor),
@@ -498,9 +507,9 @@ module top_level(
       .tile_addr_in(tile_addr),
       .menu_addr_in(menu_addr),
 
-      //.buf_write_valid_in(),
-      //.buf_write_addr_in(),
-      //.buf_write_data_in(),
+      .buf_write_valid_in(config_write_valid),
+      .buf_write_addr_in(config_write_addr),
+      .buf_write_data_in(config_write_data),
 
       .buf_read_addr_in(buf_read_addr),
 
