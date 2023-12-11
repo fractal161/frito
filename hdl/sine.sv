@@ -12,11 +12,11 @@ module sine_generator (
 
   // parameter PHASE_INCR = 32'b1000_0000_0000_0000_0000_0000_0000_0000>>3; //1/16th of 12 khz is 750 Hz
   logic [31:0] phase;
-  logic [7:0] amp;
-  logic [7:0] amp_pre;
+  logic signed [7:0] amp;
+  logic signed [7:0] amp_pre;
   logic [31:0] phase_incr;
   assign amp_pre = ({~amp[7],amp[6:0]}); //2's comp output (if not scaling)
-  assign amp_out = amp_pre>>>4; //decrease volume so it isn't too loud!
+  assign amp_out = amp_pre>>>0; //decrease volume so it isn't too loud!
   sine_lut lut_1(.clk_in(clk_in), .phase_in(phase[31:26]), .amp_out(amp));
   tone_lut tlut_1(.tone(tone_in), .phase_out(phase_incr));
   always_ff @(posedge clk_in)begin
