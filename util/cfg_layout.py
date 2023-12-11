@@ -1,31 +1,56 @@
 import sys
 
+# each tile is 32x32
 buffer = (
 #    0123456789012345678901234567890123456789
-    "                                        " # 1
-    "                 FRITO                  " # 0
-    "                                        " # 5
-    "    GAME               TIMBRE           " # 2
-    "                                        " # 3
-    "    WIDTH              PITCH            " # 6
-    "                                        " # 7
-    "    HEIGHT             VOLUME           " # 8
-    "                                        " # 9
-    "    BG R                                " # 4
-    "                                        " # 5
-    "    BG G                                " # 6
-    "                                        " # 7
-    "    BG B                                " # 8
-    "                                        " # 9
-    "    FG R                                " # 0
-    "                                        " # 1
-    "    FG G                                " # 2
-    "                                        " # 3
-    "    FB B                                " # 4
-    "                 START                  " # 1
-    "                                        " # 2
     "                                        " # 0
+    "                  FRITO                 " # 1
+    "                                        " # 2
+    "   GAME          RPS   FB B           D " # 3
+    "                                        " # 4
+    "   ROWS            1   TIMBRE      SINE " # 5
+    "                                        " # 6
+    "   COLS            1   PITCH      750HZ " # 7
+    "                                        " # 8
+    "   BG R            0   VOLUME         7 " # 9
+    "                                        " # 0
+    "   BG G            0                    " # 1
+    "                                        " # 2
+    "   BG B            0                    " # 3
+    "                                        " # 4
+    "   FG R            8                    " # 5
+    "                                        " # 6
+    "   FG G            F                    " # 7
+    "                                        " # 8
+    "                                        " # 9
+    "                  START                 " # 0
+    "                                        " # 1
+    "                                        " # 2
 #    0123456789012345678901234567890123456789
+)
+
+num_options = [
+    2,
+    8,
+    8,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    3,
+    1,
+    8,
+]
+
+games = (
+    "         RPS"
+    "      1DCELL"
+    "     FRUNNER"
+    "     DRESSUP"
+    "       TEST1"
+    "   FLAGSTEST"
 )
 
 charmap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ "

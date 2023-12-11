@@ -165,11 +165,12 @@ module top_level(
   logic clk_60hz;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(key_test.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(1dcell.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
 
+      //.proc_index_in(proc_mem_index),
       .proc_addr_in(proc_mem_addr),
       .proc_we_in(proc_mem_we),
       .proc_valid_in(proc_mem_valid_req),
@@ -177,6 +178,7 @@ module top_level(
       .proc_type_in(proc_mem_type),
       .proc_size_in(proc_mem_size),
 
+      //.proc_index_in(video_mem_index),
       .video_addr_in(video_mem_addr),
       .video_we_in(video_mem_we),
       .video_valid_in(video_mem_valid_req),
@@ -189,6 +191,7 @@ module top_level(
       .debug_data_in(debug_mem_data),
       .debug_type_in(debug_mem_type),
 
+      //.hdmi_index_in(hdmi_index),
       .hdmi_addr_in(hdmi_addr),
 
       .proc_ready_out(proc_mem_ready),
@@ -214,6 +217,7 @@ module top_level(
     );
 
   logic [15:0] keys;
+  logic [15:0] prev_keys;
   assign keys = input_keys;
 
   genvar i;
@@ -236,7 +240,14 @@ module top_level(
   logic active_processor;
   always_ff @(posedge clk_100mhz_buf)begin
     if (sys_rst)begin
-      active_processor <= 0; // TODO: don't forget to set
+      active_processor <= 0;
+      prev_keys <= 0;
+    end else if (!active_processor)begin
+      // input for config
+      if (keys[0] && ~prev_keys[0])begin
+        active_processor <= 1;
+      end
+      prev_keys <= keys;
     end
   end
 
@@ -246,7 +257,7 @@ module top_level(
 
       .chip8_clk_in(chip8_clk),
 
-      .active_in(active_processor), // TODO: replace
+      .active_in(active_processor),
       .timer_decr_in(clk_60hz),
       .key_state_in(keys_db),
 
@@ -439,7 +450,7 @@ module top_level(
   wire buf_read_valid;
   wire [9:0] buf_read_addr;
 
-  logic [7:0] tile_row;
+  wire [7:0] tile_row;
   logic [7:0] menu_tile;
   logic [7:0] buf_tile;
 
@@ -451,6 +462,8 @@ module top_level(
 
       .tile_row_in(tile_row),
       .buf_read_data_in(buf_tile),
+
+      .ptr_index_in(4'h8),
 
       .pixel_out(config_pixel),
 

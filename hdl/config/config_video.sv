@@ -1,12 +1,6 @@
 `timescale 1ns / 1ps
 `default_nettype none // prevents system from inferring an undeclared logic (good practice)
 
-`ifdef SYNTHESIS
-`define FPATH(X) `"X`"
-`else /* ! SYNTHESIS */
-`define FPATH(X) `"data/X`"
-`endif  /* ! SYNTHESIS */
-
 // configuration
 // assumes a tile is 32x32, so the screen fits around 23x40
 module config_video(
@@ -19,8 +13,7 @@ module config_video(
     input wire [7:0] tile_row_in,
     input wire [7:0] buf_read_data_in,
 
-    input wire [10:0] ptr_x_in,
-    input wire [9:0] ptr_y_in,
+    input wire [3:0] ptr_index_in,
     // TODO: inputs defining current menu state (i.e. what to show)
     output logic [23:0] pixel_out,
 
@@ -55,6 +48,35 @@ module config_video(
     end
   end
 
+  localparam [63:0] cursor = 64'h00103070F0703010;
+  logic in_cursor;
+
+  // check if hcount is inside cursor
+  always_comb begin
+    //in_cursor = 0;
+    if (ptr_index_in < 8)begin
+      if (
+        hcount_pipe[2][10:5] == 6'h1
+        && vcount_pipe[2][9:5] == 5'(3+(ptr_index_in << 1))
+      )begin
+        //in_cursor = 1;
+        in_cursor = cursor[(6'(vcount_pipe[2][4:2])<<3)+6'(hcount_pipe[2][4:2])];
+      end else begin
+        in_cursor = 0;
+      end
+    end else if (ptr_index_in < 12)begin
+      if (
+        hcount_pipe[2][10:5] == 6'd21
+        && vcount_pipe[2][9:5] == 5'(3+((ptr_index_in-8) << 1))
+      )begin
+        //in_cursor = 1;
+        in_cursor = cursor[(6'(vcount_pipe[2][4:2]<<3))+6'(hcount_pipe[2][4:2])];
+      end else begin
+        in_cursor = 0;
+      end
+    end
+  end
+
   always_comb begin
     // 2048 + 40 * (vcount_in >> 5) + (hcount_in >> 5)
     buf_read_addr_out = (vcount_in[9:5] << 5)
@@ -70,8 +92,10 @@ module config_video(
     end else begin
       // fetch
       if (hcount_pipe[2][4:0] == 0 || vcount_pipe[2][4:0] == 0)begin
-        pixel_out <= 24'h404040;
-      end else if (tile_row_in[7-hcount_pipe[2][4:2]])begin // TODO: check pipeline
+        pixel_out <= 24'h444444;
+      end else if(in_cursor)begin
+        pixel_out <= 24'hFFFFFF;
+      end else if (tile_row_in[7-hcount_pipe[2][4:2]])begin
         pixel_out <= 24'hFFFFFF;
       end else begin
         pixel_out <= 24'h000000;
