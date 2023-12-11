@@ -218,7 +218,8 @@ module top_level(
 
   logic [15:0] keys;
   logic [15:0] prev_keys;
-  assign keys = input_keys;
+  // assign keys = input_keys;
+  assign keys = sw;
 
   genvar i;
   generate
@@ -236,20 +237,6 @@ module top_level(
 
   logic active_audio;
   logic audio_out;
-
-  logic active_processor;
-  always_ff @(posedge clk_100mhz_buf)begin
-    if (sys_rst)begin
-      active_processor <= 0;
-      prev_keys <= 0;
-    end else if (!active_processor)begin
-      // input for config
-      if (keys[0] && ~prev_keys[0])begin
-        active_processor <= 1;
-      end
-      prev_keys <= keys;
-    end
-  end
 
   chip8_processor processor (
       .clk_in(clk_100mhz_buf),
@@ -433,6 +420,9 @@ module top_level(
       .hcount_in(hcount),
       .vcount_in(vcount),
 
+      .bg_color_in(bg_color),
+      .fg_color_in(fg_color),
+
       .grid_in(1'b1),
 
       .hdmi_data_in(hdmi_mem_data),
@@ -440,6 +430,32 @@ module top_level(
       .hdmi_red_out(chip8_red),
       .hdmi_green_out(chip8_green),
       .hdmi_blue_out(chip8_blue)
+    );
+
+  logic [3:0] ptr_index;
+  logic active_processor;
+  logic [3:0] game;
+  logic [23:0] bg_color;
+  logic [23:0] fg_color;
+  logic [1:0] timbre;
+  logic pitch;
+  logic [2:0] vol;
+
+  config_state config_state(
+      .clk_in(clk_100mhz_buf),
+      .rst_in(sys_rst),
+
+      .key_state_in(keys_db),
+
+      .ptr_index_out(ptr_index),
+      .active_processor_out(active_processor),
+      .game_out(game),
+      .bg_color_out(bg_color),
+      .fg_color_out(fg_color),
+
+      .timbre_out(timbre),
+      .pitch_out(pitch),
+      .vol_out(vol)
     );
 
   logic [23:0] config_pixel;
@@ -463,7 +479,7 @@ module top_level(
       .tile_row_in(tile_row),
       .buf_read_data_in(buf_tile),
 
-      .ptr_index_in(4'h8),
+      .ptr_index_in(ptr_index),
 
       .pixel_out(config_pixel),
 

@@ -54,26 +54,22 @@ module config_video(
   // check if hcount is inside cursor
   always_comb begin
     //in_cursor = 0;
-    if (ptr_index_in < 8)begin
-      if (
-        hcount_pipe[2][10:5] == 6'h1
-        && vcount_pipe[2][9:5] == 5'(3+(ptr_index_in << 1))
-      )begin
-        //in_cursor = 1;
-        in_cursor = cursor[(6'(vcount_pipe[2][4:2])<<3)+6'(hcount_pipe[2][4:2])];
-      end else begin
-        in_cursor = 0;
-      end
-    end else if (ptr_index_in < 12)begin
-      if (
-        hcount_pipe[2][10:5] == 6'd21
-        && vcount_pipe[2][9:5] == 5'(3+((ptr_index_in-8) << 1))
-      )begin
-        //in_cursor = 1;
-        in_cursor = cursor[(6'(vcount_pipe[2][4:2]<<3))+6'(hcount_pipe[2][4:2])];
-      end else begin
-        in_cursor = 0;
-      end
+    if ((
+      ptr_index_in < 8
+      && hcount_pipe[2][10:5] == 6'h1
+      && vcount_pipe[2][9:5] == 5'(3+(ptr_index_in << 1))
+    ) || (
+      ptr_index_in < 12
+      && hcount_pipe[2][10:5] == 6'd21
+      && vcount_pipe[2][9:5] == 5'(3+((ptr_index_in-8) << 1))
+    ) || (
+      ptr_index_in == 12
+      && hcount_pipe[2][10:5] == 6'd16
+      && vcount_pipe[2][9:5] == 5'd20
+    ))begin
+      in_cursor = cursor[(6'(vcount_pipe[2][4:2])<<3)+6'(hcount_pipe[2][4:2])];
+    end else begin
+      in_cursor = 0;
     end
   end
 

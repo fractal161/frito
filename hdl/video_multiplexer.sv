@@ -12,6 +12,9 @@ module video_multiplexer(
     input wire [10:0] hcount_in, // [0,1280)
     input wire [9:0] vcount_in, // [0,720)
 
+    input wire [23:0] bg_color_in,
+    input wire [23:0] fg_color_in,
+
     input wire [7:0] hdmi_data_in,
 
     // configuration
@@ -84,13 +87,13 @@ module video_multiplexer(
       hdmi_blue_out = 0;
     end else begin
       if(!hdmi_data_in[7 - left_offset_piped])begin
-        hdmi_red_out = 0;
-        hdmi_green_out = 0;
-        hdmi_blue_out = 0;
+        hdmi_red_out = bg_color_in[23:16];
+        hdmi_green_out = bg_color_in[15:8];
+        hdmi_blue_out = bg_color_in[7:0];
       end else begin
-        hdmi_red_out = 8'h7F;
-        hdmi_green_out = 8'hFF;
-        hdmi_blue_out = 8'hD4;
+        hdmi_red_out = fg_color_in[23:16];
+        hdmi_green_out = fg_color_in[15:8];
+        hdmi_blue_out = fg_color_in[7:0];
       end
       if (grid_in && (x_piped[3:0] == 0 || y_piped[3:0] == 0))begin
         hdmi_red_out ^= 8'h40;
