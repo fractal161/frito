@@ -165,7 +165,7 @@ module top_level(
   logic clk_60hz;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(quirks.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(beep_test.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel),
       .rst_in(sys_rst),
@@ -228,7 +228,7 @@ module top_level(
     end
   endgenerate
 
-  assign led = keys_db;
+  // assign led = keys_db;
 
   logic active_audio;
   logic audio_out;
@@ -276,12 +276,16 @@ module top_level(
     );
 
 
+  logic audio_clk;
+  audio_clk_wiz macw (.clk_in(clk_100mhz_buf), .clk_out(audio_clk));
+
+
   chip8_audio audio (
-     .clk_in(clk_100mhz_buf),
+     .clk_in(audio_clk),
      .rst_in(sys_rst),
      .active_in(active_audio),
      .timbre_in(sw[1:0]),
-     //.pitch_in(750),
+     .tone_in(440),
      .vol_in(sw[15:13]),
      .level_out(audio_out)
    );
