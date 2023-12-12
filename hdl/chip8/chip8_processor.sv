@@ -48,6 +48,8 @@ module chip8_processor(
     // audio on
     output logic active_audio_out,
 
+    output logic [5:0] chip_index_out,
+
     // debug
     output logic [2:0] error_out
   );
@@ -57,8 +59,9 @@ module chip8_processor(
   localparam int FETCH = 1;
   localparam int EXECUTE = 2;
   localparam int FINISH = 3;
+  localparam int SWITCH = 4;
 
-  logic [1:0] state;
+  logic [2:0] state;
   // tracks different steps within each main state
   logic [5:0] substate;
 
@@ -117,9 +120,11 @@ module chip8_processor(
   logic [15:0] pc; // program counter
   //logic [7:0] sp; // stack pointer
   //logic [15:0] stack [16];
+
+  logic [15:0] key_snapshot;
   logic [15:0] keys_just_pressed;
   logic [15:0] keys_released;
-  assign keys_released = keys_just_pressed & (~key_state_in);
+  assign keys_released = keys_just_pressed & (~key_snapshot);
 
   logic [11:0] sprite_addr;
   logic [5:0] sprite_x;
@@ -162,6 +167,7 @@ module chip8_processor(
       active_audio_out <= 0;
 
       keys_just_pressed <= 0;
+      chip_index_out <= 0;
     end else if (active_in)begin
       // main state machine goes here. states are as follows:
       // - idle (wait until chip8_clk_in)
@@ -173,7 +179,9 @@ module chip8_processor(
         IDLE: begin
           if (chip8_clk_in)begin
             state <= FETCH;
+            chip_index_out <= 0;
             substate <= 0;
+            key_snapshot <= key_state_in;
           end else begin
             mem_valid_out <= 0;
           end
@@ -1142,7 +1150,7 @@ module chip8_processor(
                   mem_valid_out <= 0;
                   if (mem_valid_in)begin
                     if (mem_data_in <= 8'h0F
-                      && key_state_in[mem_data_in[3:0]]
+                      && key_snapshot[mem_data_in[3:0]]
                     )begin
                       pc <= pc + 2;
                     end
@@ -1172,7 +1180,7 @@ module chip8_processor(
                 1: begin // check if key is pressed
                   if (mem_valid_in)begin
                     if (mem_data_in < 8'h10
-                      && !key_state_in[mem_data_in[3:0]]
+                      && !key_snapshot[mem_data_in[3:0]]
                     )begin
                       pc <= pc + 2;
                     end
@@ -1223,7 +1231,7 @@ module chip8_processor(
             LD_KEY: begin // Fx0A
               case (substate)
                 0: begin
-                  keys_just_pressed <= keys_just_pressed | key_state_in;
+                  keys_just_pressed <= keys_just_pressed | key_snapshot;
                   if (keys_released != 0)begin
                     // honestly too tired to figure out how to do this right
                     if (keys_released[0])begin
@@ -1753,7 +1761,7 @@ module chip8_processor(
                   substate <= substate+1;
                   //pending_timer_decr <= 0;
                 end else begin
-                  state <= IDLE;
+                  state <= SWITCH;
                   substate <= 0;
                 end
               end else begin
@@ -1805,10 +1813,13 @@ module chip8_processor(
                 mem_data_out <= (mem_data_in[7:0] == 0) ? 0 : mem_data_in[7:0]-1;
                 mem_type_out <= PROC_MEM_TYPE_REG;
                 mem_size_out <= 0;
-                state <= IDLE;
+                state <= SWITCH;
                 substate <= 0;
 
-                active_audio_out <= (mem_data_in[7:0] > 1);
+                // only track audio for top-left instance
+                if (chip_index_out == 0) begin
+                  active_audio_out <= (mem_data_in[7:0] > 1);
+                end
               end else begin
                 mem_valid_out <= 0;
               end
@@ -1817,6 +1828,28 @@ module chip8_processor(
               error_out <= ERR_STATE;
             end
           endcase
+        end
+        SWITCH: begin
+          // disgusting hack
+          if (substate == 0)begin
+            mem_valid_out <= 1;
+            mem_we_out <= 0;
+          end else begin
+            mem_valid_out <= 0;
+          end
+          // wait a few cycles for write to propogate
+          if (substate == 6)begin
+            substate <= 0;
+            if (chip_index_out == 3)begin
+              chip_index_out <= 0;
+              state <= IDLE;
+            end else begin
+              chip_index_out <= chip_index_out + 1;
+              state <= FETCH;
+            end
+          end else begin
+            substate <= substate+1;
+          end
         end
         default: begin
           error_out <= ERR_STATE;

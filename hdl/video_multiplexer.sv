@@ -30,7 +30,7 @@ module video_multiplexer(
     output logic [7:0] hdmi_green_out,
     output logic [7:0] hdmi_blue_out,
 
-    output logic [7:0] proc_index_out
+    output logic [5:0] chip_index_out
   );
 
   logic [2:0] left_offset;
@@ -149,19 +149,19 @@ module video_multiplexer(
       htally <= hstep + screen_width + (hoff >> 1);
 
       if (vcount_in == 0)begin
-        proc_index_out <= 0;
+        chip_index_out <= 0;
         vtally <= vstep + screen_height + (voff >> 1);
-      end else if (vcount_in == vtally+vstep)begin
+      end else if (vcount_in == vtally+vstep+2)begin
         if (10'd720-vcount_in > screen_height)begin
-          proc_index_out <= proc_index_out + 1;
+          chip_index_out <= chip_index_out + 1;
           vtally <= vtally + vstep + screen_height;
         end
       end else begin
-        proc_index_out <= proc_index_out - cols_in + 1;
+        chip_index_out <= chip_index_out - cols_in + 1;
       end
-    end else if (hcount_in == htally+1)begin
+    end else if (hcount_in == htally+1+2)begin
       if (11'd1280-hcount_in > screen_width)begin
-        proc_index_out <= proc_index_out + 1;
+        chip_index_out <= chip_index_out + 1;
         htally <= htally + hstep + screen_width;
       end
     end

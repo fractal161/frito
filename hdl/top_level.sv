@@ -168,10 +168,12 @@ module top_level(
   logic clk_60hz;
 
   // TODO: fill out params as needed
-  chip8_memory #(.FILE(`FPATH(1dcell.mem))) mem(
+  chip8_memory #(.FILE(`FPATH(rps.mem))) mem(
       .clk_in(clk_100mhz_buf),
       .hdmi_clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
+
+      .chip_index_in(chip_index),
 
       //.proc_index_in(proc_mem_index),
       .proc_addr_in(proc_mem_addr),
@@ -196,6 +198,7 @@ module top_level(
 
       //.hdmi_index_in(hdmi_index),
       .hdmi_addr_in(hdmi_addr),
+      .hdmi_index_in(hdmi_chip_index),
 
       .proc_ready_out(proc_mem_ready),
       .proc_valid_out(proc_mem_valid_res),
@@ -241,6 +244,8 @@ module top_level(
   logic active_audio;
   logic audio_out;
 
+  logic [5:0] chip_index;
+
   chip8_processor processor (
       .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
@@ -279,13 +284,17 @@ module top_level(
 
       .clear_buffer_out(video_clear_buffer),
 
-      .active_audio_out(active_audio)
+      .active_audio_out(active_audio),
+
+      .chip_index_out(chip_index)
       //.error_out()
     );
 
 
   logic audio_clk;
-  audio_clk_wiz macw (.clk_in(clk_100mhz_buf), .clk_out(audio_clk));
+  `ifdef SYNTHESIS
+    audio_clk_wiz macw (.clk_in(clk_100mhz_buf), .clk_out(audio_clk));
+  `endif
 
   chip8_audio audio (
      .clk_in(audio_clk),
@@ -406,12 +415,12 @@ module top_level(
       .fc_out(frame_count)
     );
 
-  logic [1:0] clk_60hz_tmp;
-  logic [1:0] active_proc_tmp;
+  (* ASYNC_REG = "TRUE" *) logic [1:0] clk_60hz_tmp;
+  (* ASYNC_REG = "TRUE" *) logic [1:0] active_proc_tmp;
   logic active_proc_fifo;
 
   // fifo for crossing from pixel clk to 100mhz
-  always @(posedge clk_100mhz_buf)begin
+  always_ff @(posedge clk_100mhz_buf)begin
     if (sys_rst) begin
       clk_60hz_tmp <= 0;
       clk_60hz <= 0;
@@ -420,14 +429,18 @@ module top_level(
       active_proc_fifo <= 0;
     end else begin
       {clk_60hz, clk_60hz_tmp} <= {clk_60hz_tmp, new_frame};
-      {active_proc_fifo, active_proc_tmp} <= {active_proc_tmp, active_processor};
+      `ifdef SYNTHESIS
+        {active_proc_fifo, active_proc_tmp} <= {active_proc_tmp, active_processor};
+      `else
+         active_proc_fifo <= 1;
+      `endif
     end
   end
 
-  logic [31:0] active_audio_tmp;
+  (* ASYNC_REG = "TRUE" *) logic [31:0] active_audio_tmp;
   logic [15:0] active_audio_fifo;
   // fifo for crossing from 100mhz to audio clk
-  always @(posedge audio_clk)begin
+  always_ff @(posedge audio_clk)begin
     if (sys_rst) begin
       active_audio_tmp <= 0;
       active_audio_fifo <= 0;
@@ -436,10 +449,10 @@ module top_level(
     end
   end
 
-  logic [31:0] keys_db_tmp;
+  (* ASYNC_REG = "TRUE" *) logic [31:0] keys_db_tmp;
   logic [15:0] keys_fifo;
   // fifo for crossing from 100mhz to pixel clk
-  always @(posedge clk_100mhz_buf)begin
+  always_ff @(posedge clk_100mhz_buf)begin
     if (sys_rst) begin
       keys_db_tmp <= 0;
       keys_fifo <= 0;
@@ -449,15 +462,15 @@ module top_level(
   end
 
   // fifo for crossing from pixel clk to audio clk
-  logic [3:0] timbre_tmp;
+  (* ASYNC_REG = "TRUE" *) logic [3:0] timbre_tmp;
   logic [1:0] timbre_fifo;
 
-  logic [19:0] pitch_tmp;
+  (* ASYNC_REG = "TRUE" *) logic [19:0] pitch_tmp;
   logic [9:0] pitch_fifo;
 
-  logic [5:0] vol_tmp;
+  (* ASYNC_REG = "TRUE" *) logic [5:0] vol_tmp;
   logic [2:0] vol_fifo;
-  always @(posedge audio_clk)begin
+  always_ff @(posedge audio_clk)begin
     if (sys_rst) begin
       timbre_tmp <= 0;
       timbre_fifo <= 0;
@@ -476,6 +489,7 @@ module top_level(
 
   logic [7:0] red, green, blue; //red green and blue pixel values for output
   logic [7:0] chip8_red, chip8_green, chip8_blue; //red green and blue pixel values for output
+  logic [5:0] hdmi_chip_index;
   video_multiplexer multiplexer1(
       .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
@@ -485,8 +499,8 @@ module top_level(
       .bg_color_in(bg_color),
       .fg_color_in(fg_color),
 
-      .rows_in(sw[3:0]),
-      .cols_in(sw[7:4]),
+      .rows_in(4'd2),
+      .cols_in(4'd2),
 
       .grid_in(1'b0),
 
@@ -494,7 +508,9 @@ module top_level(
       .hdmi_addr_out(hdmi_addr),
       .hdmi_red_out(chip8_red),
       .hdmi_green_out(chip8_green),
-      .hdmi_blue_out(chip8_blue)
+      .hdmi_blue_out(chip8_blue),
+
+      .chip_index_out(hdmi_chip_index)
     );
 
   logic [3:0] ptr_index;

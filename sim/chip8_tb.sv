@@ -32,7 +32,7 @@ module chip8_tb;
     #20;
     btn_in = 0;
     #20;
-    for (int i = 0; i < 500; i=i+1)begin
+    for (int i = 0; i < 11; i=i+1)begin
       if (i % 10 == 0)begin
         $display("Cycles: %d", i);
       end

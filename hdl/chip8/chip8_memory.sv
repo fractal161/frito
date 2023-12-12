@@ -32,6 +32,8 @@ module chip8_memory #(
     //input wire flash_in,
     //input wire [7:0] flash_data_in,
 
+    input wire [5:0] chip_index_in,
+
     // r/w to chip-8 ram/reg/stk (12 bits for ram, 5 for reg/stack)
     // order of regs: V0-VF, Ih/Il, PCh/PCl, SP, DT, ST
     input wire [11:0] proc_addr_in,
@@ -47,7 +49,6 @@ module chip8_memory #(
     input wire video_valid_in,
     input wire [2*WIDTH-1:0] video_data_in,
     input wire [0:0] video_type_in,
-    input wire video_size_in, // 0 for one byte, 1 for two bytes
 
     input wire [11:0] debug_addr_in,
     input wire debug_we_in,
@@ -60,6 +61,7 @@ module chip8_memory #(
 
     // get value for hdmi module
     input wire [15:0] hdmi_addr_in,
+    input wire [5:0] hdmi_index_in,
 
     // readies for each pattern
     output logic proc_ready_out,
@@ -88,7 +90,8 @@ module chip8_memory #(
     + 1*2 // I
     + 1*2 // PC
     + 1*1 // SP
-    + 2*1; // DT and ST
+    + 2*1 // DT and ST
+    + 1*2; // key state
   localparam int STK_DEPTH = 16*2;
   localparam int DEPTH = RAM_DEPTH + VRAM_DEPTH + REG_DEPTH + STK_DEPTH;
   // TODO: add byte for hires status
@@ -116,18 +119,25 @@ module chip8_memory #(
   logic [WIDTH-1:0] data_hi;
   logic [WIDTH-1:0] data_lo;
 
+  localparam NUM_CHIPS = 4;
+
+  logic [WIDTH-1:0] data_pool[0:NUM_CHIPS-1];
+  logic [WIDTH-1:0] hdmi_data_pool[0:NUM_CHIPS-1];
+
+  logic [63:0] active_chip;
+
   // parameters for second port
   logic [$clog2(DEPTH)-1:0] hdmi_addr;
 
   // output is the type of state (depth verified using tb)
-  pipeline #(.WIDTH($clog2(NUM_STATES)), .DEPTH(2)) state_pipeline(
+  pipeline #(.WIDTH($clog2(NUM_STATES)), .DEPTH(3)) state_pipeline(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(state),
       .val_out(state_out)
     );
 
-  pipeline #(.WIDTH(1), .DEPTH(2)) we_pipeline(
+  pipeline #(.WIDTH(1), .DEPTH(3)) we_pipeline(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(we),
@@ -140,12 +150,14 @@ module chip8_memory #(
   logic [2*WIDTH-1:0] proc_data;
   logic [$clog2(PROC_MEM_TYPE_COUNT)-1:0] proc_type;
   logic proc_size;
+  logic proc_index;
 
   logic [11:0] video_addr;
   logic video_we;
   logic [2*WIDTH-1:0] video_data;
   logic [$clog2(VIDEO_MEM_TYPE_COUNT)-1:0] video_type;
   logic video_size;
+  logic video_index;
 
   logic [11:0] debug_addr;
   logic debug_we;
@@ -359,6 +371,7 @@ module chip8_memory #(
   end
 
   always_comb begin
+    active_chip = 1 << chip_index_in;
     // determine what to send out
     proc_valid_out = (state_out == PROC_LO && !we_piped);
     video_valid_out = (state_out == VIDEO && !we_piped);
@@ -370,30 +383,68 @@ module chip8_memory #(
   // hdmi address conversion
   assign hdmi_addr = hdmi_addr_in + RAM_DEPTH;
 
-  xilinx_true_dual_port_read_first_2_clock_ram #(
-      .RAM_WIDTH(WIDTH),
-      .RAM_DEPTH(DEPTH),
-      .INIT_FILE(FILE)
-    ) memory (
-      .addra(addr),
-      .clka(clk_in),
-      .wea(we), // write-enable
-      .dina(data_in), // data_in
-      .ena(1'b1), // set to 0 to save power
-      .regcea(1'b1),
-      .rsta(rst_in),
-      .douta(data_lo),
+  always_ff @(posedge clk_in)begin
+    data_lo <= data_pool[chip_index_in];
+    hdmi_data_out <= hdmi_data_pool[hdmi_index_in];
+  end
 
-      // hdmi fetch
-      .addrb(hdmi_addr),
-      .clkb(hdmi_clk_in),
-      .web(1'b0), // write-enable (hdmi should never write to ram)
-      .dinb(8'b0), // read only, so unnecessary
-      .enb(1'b1), // set to 0 to save power
-      .regceb(1'b1),
-      .rstb(rst_in),
-      .doutb(hdmi_data_out)
-    );
+  genvar i;
+  generate
+    for (i = 0; i < NUM_CHIPS; i=i+2)begin : g_chipmem
+        xilinx_true_dual_port_read_first_2_clock_ram #(
+          .RAM_WIDTH(WIDTH),
+          .RAM_DEPTH(DEPTH),
+          .INIT_FILE(`FPATH(rps.mem))
+        ) memory (
+          .addra(addr),
+          .clka(clk_in),
+          .wea(we & active_chip[i]), // write-enable
+          .dina(data_in), // data_in
+          .ena(1'b1), // set to 0 to save power
+          .regcea(1'b1),
+          .rsta(rst_in),
+          .douta(data_pool[i]),
+
+          // hdmi fetch
+          .addrb(hdmi_addr),
+          .clkb(hdmi_clk_in),
+          .web(1'b0), // write-enable (hdmi should never write to ram)
+          .dinb(8'b0), // read only, so unnecessary
+          .enb(1'b1), // set to 0 to save power
+          .regceb(1'b1),
+          .rstb(rst_in),
+          .doutb(hdmi_data_pool[i])
+        );
+    end
+  endgenerate
+  generate
+    for (i = 1; i < NUM_CHIPS; i=i+2)begin : g_chipmem2
+        xilinx_true_dual_port_read_first_2_clock_ram #(
+          .RAM_WIDTH(WIDTH),
+          .RAM_DEPTH(DEPTH),
+          .INIT_FILE(`FPATH(ibm.mem))
+        ) memory (
+          .addra(addr),
+          .clka(clk_in),
+          .wea(we & active_chip[i]), // write-enable
+          .dina(data_in), // data_in
+          .ena(active_chip[i]), // set to 0 to save power
+          .regcea(1'b1),
+          .rsta(rst_in),
+          .douta(data_pool[i]),
+
+          // hdmi fetch
+          .addrb(hdmi_addr),
+          .clkb(hdmi_clk_in),
+          .web(1'b0), // write-enable (hdmi should never write to ram)
+          .dinb(8'b0), // read only, so unnecessary
+          .enb(1'b1), // set to 0 to save power
+          .regceb(1'b1),
+          .rstb(rst_in),
+          .doutb(hdmi_data_pool[i])
+        );
+    end
+  endgenerate
 
 endmodule // memory
 

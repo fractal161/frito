@@ -116,6 +116,7 @@ module config_state(
 
       menu_index <= 0;
     end else begin
+      if (!active_processor_out)begin
       case (state)
         IDLE: begin
           write_valid_out <= 0;
@@ -344,6 +345,7 @@ module config_state(
         default: begin
         end
       endcase
+      end
     end
     prev_key_state <= key_state_piped;
   end
