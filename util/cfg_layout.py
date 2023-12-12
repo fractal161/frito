@@ -10,7 +10,7 @@ buffer = (
     "                                        " # 4
     "   ROWS            1   TIMBRE      SINE " # 5
     "                                        " # 6
-    "   COLS            1   PITCH      750HZ " # 7
+    "   COLS            1   PITCH      440HZ " # 7
     "                                        " # 8
     "   BG R            0   VOLUME         7 " # 9
     "                                        " # 0
@@ -45,12 +45,19 @@ num_options = [
 ]
 
 games = (
-    "         RPS"
-    "      1DCELL"
-    "     FRUNNER"
-    "     DRESSUP"
-    "       TEST1"
-    "   FLAGSTEST"
+    "         RPS    "
+    "      1DCELL    "
+    "     FRUNNER    "
+    "     DRESSUP    "
+    "       TEST1    "
+    "   FLAGSTEST    "
+)
+
+timbres = (
+    "SINE"
+    " SQU"
+    " TRI"
+    " SAW"
 )
 
 charmap = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ "
@@ -429,6 +436,12 @@ chars = [
 
 chars.extend(0 for _ in range(8*(256 - len(charmap))))
 cfg_data = [f'{c:02x}' for c in chars]
+print('cfg buffer size:', len(cfg_data))
+cfg_data.extend(f'{charmap.index(c):02x}' for c in games)
+print('cfg buffer/games size:', len(cfg_data))
+cfg_data.extend(f'{charmap.index(c):02x}' for c in timbres)
+print('cfg buffer/games/timbre size:', len(cfg_data))
+
 cfg_buffer = [f'{charmap.index(c):02x}' for c in buffer]
 with open('data/cfg_data.mem', 'w') as f:
     f.write(' '.join(cfg_data))

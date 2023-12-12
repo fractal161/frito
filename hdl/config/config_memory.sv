@@ -31,7 +31,7 @@ module config_memory(
 
   xilinx_true_dual_port_read_first_2_clock_ram #(
       .RAM_WIDTH(8),
-      .RAM_DEPTH(2048),
+      .RAM_DEPTH(2160),
       .INIT_FILE(`FPATH(cfg_data.mem))
     ) tile_and_menu_mem (
       // fetch tile row

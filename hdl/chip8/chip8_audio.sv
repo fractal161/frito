@@ -12,7 +12,7 @@ module chip8_audio(
     // config
     input wire [1:0] timbre_in, // TODO: e.g. sine, triangle, square waves
     input wire [9:0] tone_in, // TODO: decide how to represent
-    input wire [7:0] vol_in, // TODO: decide how to represent
+    input wire [2:0] vol_in, // TODO: decide how to represent
 
 
     // signal as 8-bit value 

@@ -63,9 +63,12 @@ module top_level(
   logic locked; //locked signal (we'll leave unused but still hook it up)
 
   logic clk_100mhz_buf;
+  logic clk_pixel_buf;
+  assign clk_pixel_buf = clk_pixel;
 
   `ifdef SYNTHESIS
     BUFG mbf (.I(clk_100mhz), .O(clk_100mhz_buf));
+    //BUFG pbf (.I(clk_pixel), .O(clk_pixel_buf));
   `else
     assign clk_100mhz_buf = clk_100mhz;
   `endif
@@ -167,7 +170,7 @@ module top_level(
   // TODO: fill out params as needed
   chip8_memory #(.FILE(`FPATH(1dcell.mem))) mem(
       .clk_in(clk_100mhz_buf),
-      .hdmi_clk_in(clk_pixel),
+      .hdmi_clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
 
       //.proc_index_in(proc_mem_index),
@@ -244,7 +247,7 @@ module top_level(
 
       .chip8_clk_in(chip8_clk),
 
-      .active_in(active_processor),
+      .active_in(active_proc_fifo),
       .timer_decr_in(clk_60hz),
       .key_state_in(keys_db),
 
@@ -284,14 +287,13 @@ module top_level(
   logic audio_clk;
   audio_clk_wiz macw (.clk_in(clk_100mhz_buf), .clk_out(audio_clk));
 
-
   chip8_audio audio (
      .clk_in(audio_clk),
      .rst_in(sys_rst),
-     .active_in(active_audio),
-     .timbre_in(sw[1:0]),
-     .tone_in(440),
-     .vol_in(sw[15:13]),
+     .active_in(active_audio_fifo),
+     .timbre_in(timbre_fifo),
+     .tone_in(pitch_fifo),
+     .vol_in(vol_fifo),
      .level_out(audio_out)
    );
 
@@ -363,7 +365,7 @@ module top_level(
       .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
       //.val_in(debug_data),
-      .val_in(ptr_index),
+      .val_in(config_write_addr),
       .cat_out(ss_c),
       .an_out({ss0_an, ss1_an})
     );
@@ -394,7 +396,7 @@ module top_level(
   //written by you! (make sure you include in your hdl)
   //default instantiation so making signals for 720p
   video_sig_gen mvg(
-      .clk_pixel_in(clk_pixel),
+      .clk_pixel_in(clk_pixel_buf),
       .rst_in(sys_rst),
       .hcount_out(hcount),
       .vcount_out(vcount),
@@ -406,21 +408,77 @@ module top_level(
     );
 
   logic [1:0] clk_60hz_tmp;
+  logic [1:0] active_proc_tmp;
+  logic active_proc_fifo;
 
-  // 60hz clock fifo
-  always @(posedge clk_pixel)begin
+  // fifo for crossing from pixel clk to 100mhz
+  always @(posedge clk_100mhz_buf)begin
     if (sys_rst) begin
       clk_60hz_tmp <= 0;
       clk_60hz <= 0;
+
+      active_proc_tmp <= 0;
+      active_proc_fifo <= 0;
     end else begin
       {clk_60hz, clk_60hz_tmp} <= {clk_60hz_tmp, new_frame};
+      {active_proc_fifo, active_proc_tmp} <= {active_proc_tmp, active_processor};
+    end
+  end
+
+  logic [31:0] active_audio_tmp;
+  logic [15:0] active_audio_fifo;
+  // fifo for crossing from 100mhz to audio clk
+  always @(posedge audio_clk)begin
+    if (sys_rst) begin
+      active_audio_tmp <= 0;
+      active_audio_fifo <= 0;
+    end else begin
+      {active_audio_fifo, active_audio_tmp} <= {active_audio_tmp, active_audio};
+    end
+  end
+
+  logic [31:0] keys_db_tmp;
+  logic [15:0] keys_fifo;
+  // fifo for crossing from 100mhz to pixel clk
+  always @(posedge clk_100mhz_buf)begin
+    if (sys_rst) begin
+      keys_db_tmp <= 0;
+      keys_fifo <= 0;
+    end else begin
+      {keys_fifo, keys_db_tmp} <= {keys_db_tmp, keys_db};
+    end
+  end
+
+  // fifo for crossing from pixel clk to audio clk
+  logic [3:0] timbre_tmp;
+  logic [1:0] timbre_fifo;
+
+  logic [19:0] pitch_tmp;
+  logic [9:0] pitch_fifo;
+
+  logic [5:0] vol_tmp;
+  logic [2:0] vol_fifo;
+  always @(posedge audio_clk)begin
+    if (sys_rst) begin
+      timbre_tmp <= 0;
+      timbre_fifo <= 0;
+
+      pitch_tmp <= 0;
+      pitch_fifo <= 0;
+
+      vol_tmp <= 0;
+      vol_fifo <= 0;
+    end else begin
+      {timbre_fifo, timbre_tmp} <= {timbre_tmp, timbre};
+      {pitch_fifo, pitch_tmp} <= {pitch_tmp, pitch};
+      {vol_fifo, vol_tmp} <= {vol_tmp, vol};
     end
   end
 
   logic [7:0] red, green, blue; //red green and blue pixel values for output
   logic [7:0] chip8_red, chip8_green, chip8_blue; //red green and blue pixel values for output
   video_multiplexer multiplexer1(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
       .hcount_in(hcount),
       .vcount_in(vcount),
@@ -443,7 +501,7 @@ module top_level(
   logic [23:0] bg_color;
   logic [23:0] fg_color;
   logic [1:0] timbre;
-  logic pitch;
+  logic [9:0] pitch;
   logic [2:0] vol;
 
   logic config_write_valid;
@@ -451,10 +509,13 @@ module top_level(
   logic [7:0] config_write_data;
 
   config_state config_state(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
 
       .key_state_in(keys_db),
+      .menu_data_in(menu_tile),
+
+      .menu_addr_out(menu_addr),
 
       .write_valid_out(config_write_valid),
       .write_addr_out(config_write_addr),
@@ -484,7 +545,7 @@ module top_level(
   logic [7:0] buf_tile;
 
   config_video config_vid(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
       .hcount_in(hcount),
       .vcount_in(vcount),
@@ -501,7 +562,7 @@ module top_level(
     );
 
   config_memory config_mem(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
 
       .tile_addr_in(tile_addr),
@@ -532,7 +593,7 @@ module top_level(
   logic vert_sync_piped;
 
   pipeline #(.WIDTH(3), .DEPTH(4)) video_signal_pipe(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
       .val_in({active_draw, hor_sync, vert_sync}),
       .val_out({active_draw_piped, hor_sync_piped, vert_sync_piped})
@@ -543,7 +604,7 @@ module top_level(
 
   //three tmds_encoders (blue, green, red)
   tmds_encoder tmds_red(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
       .data_in(red),
       .control_in(2'b0),
@@ -552,7 +613,7 @@ module top_level(
     );
 
   tmds_encoder tmds_green(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
       .data_in(green),
       .control_in(2'b0),
@@ -561,7 +622,7 @@ module top_level(
     );
 
   tmds_encoder tmds_blue(
-      .clk_in(clk_pixel),
+      .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
       .data_in(blue),
       .control_in({vert_sync_piped, hor_sync_piped}),
@@ -572,7 +633,7 @@ module top_level(
   //three tmds_serializers (blue, green, red):
   `ifdef SYNTHESIS
     tmds_serializer red_ser(
-        .clk_pixel_in(clk_pixel),
+        .clk_pixel_in(clk_pixel_buf),
         .clk_5x_in(clk_5x),
         .rst_in(sys_rst),
         .tmds_in(tmds_10b[2]),
@@ -580,7 +641,7 @@ module top_level(
       );
 
     tmds_serializer green_ser(
-        .clk_pixel_in(clk_pixel),
+        .clk_pixel_in(clk_pixel_buf),
         .clk_5x_in(clk_5x),
         .rst_in(sys_rst),
         .tmds_in(tmds_10b[1]),
@@ -588,7 +649,7 @@ module top_level(
       );
 
     tmds_serializer blue_ser(
-        .clk_pixel_in(clk_pixel),
+        .clk_pixel_in(clk_pixel_buf),
         .clk_5x_in(clk_5x),
         .rst_in(sys_rst),
         .tmds_in(tmds_10b[0]),
@@ -606,7 +667,7 @@ module top_level(
     OBUFDS OBUFDS_blue (.I(tmds_signal[0]), .O(hdmi_tx_p[0]), .OB(hdmi_tx_n[0]));
     OBUFDS OBUFDS_green(.I(tmds_signal[1]), .O(hdmi_tx_p[1]), .OB(hdmi_tx_n[1]));
     OBUFDS OBUFDS_red  (.I(tmds_signal[2]), .O(hdmi_tx_p[2]), .OB(hdmi_tx_n[2]));
-    OBUFDS OBUFDS_clock(.I(clk_pixel), .O(hdmi_clk_p), .OB(hdmi_clk_n));
+    OBUFDS OBUFDS_clock(.I(clk_pixel_buf), .O(hdmi_clk_p), .OB(hdmi_clk_n));
   `endif
 
 endmodule // top_level

@@ -6,10 +6,13 @@ module config_state(
     input wire clk_in,
     input wire rst_in,
 
-    // TODO: inputs for manipulating state
     input wire [15:0] key_state_in,
 
+    input wire [7:0] menu_data_in,
+
     //output logic chip8_clk_out, // rate at which to execute chip8 instructions
+
+    output logic [11:0] menu_addr_out,
 
     output logic write_valid_out,
     output logic [9:0] write_addr_out,
@@ -27,11 +30,15 @@ module config_state(
     output logic [23:0] fg_color_out,
 
     output logic [1:0] timbre_out,
-    output logic pitch_out,
+    output logic [9:0] pitch_out,
     output logic [2:0] vol_out
   );
 
   localparam int NUM_ROWS = 13;
+
+  localparam int NUM_GAMES = 6;
+  localparam int GAME_ROW_OFFSET = 2048;
+  localparam int TIMBR_ROW_OFFSET = 2144;
 
   localparam int IDLE = 0;
   localparam int WRITE = 1;
@@ -45,15 +52,31 @@ module config_state(
   logic [3:0] fg_g;
   logic [3:0] fg_b;
 
+  logic [15:0] key_state_piped;
+  pipeline #(.WIDTH(15), .DEPTH(4)) key_pipe(
+      .clk_in(clk_in),
+      .rst_in(rst_in),
+      .val_in(key_state_in),
+      .val_out(key_state_piped)
+    );
+
   logic [15:0] prev_key_state;
   logic [15:0] key_presses;
 
-  assign key_presses = key_state_in & ~prev_key_state;
+  assign key_presses = key_state_piped & ~prev_key_state;
+
+  logic [9:0] pitches[3:0];
+  logic [9:0] pitch_tmp;
+  logic [2:0] pitch_index;
+
+  logic [3:0] menu_index;
 
   always_ff @(posedge clk_in)begin
     if (rst_in)begin
       ptr_index_out <= 0;
       active_processor_out <= 0;
+
+      game_out <= 0;
 
       rows_out <= 1;
       cols_out <= 1;
@@ -66,10 +89,22 @@ module config_state(
       fg_g <= 4'hF;
       fg_b <= 4'hD;
 
+      pitches[0] <= 10'd440;
+      pitches[1] <= 10'd493;
+      pitches[2] <= 10'd523;
+      pitches[3] <= 10'd587;
+      pitches[4] <= 10'd659;
+      pitches[5] <= 10'd698;
+      pitches[6] <= 10'd784;
+      pitches[7] <= 10'd880;
+
       timbre_out <= 0;
-      pitch_out <= 0;
+      pitch_out <= 10'd440;
+      pitch_index <= 0;
       vol_out <= 3'h7;
       write_valid_out <= 0;
+
+      menu_index <= 0;
     end else begin
       case (state)
         IDLE: begin
@@ -93,6 +128,7 @@ module config_state(
           end else if (key_presses[4])begin
             case(ptr_index_out)
               4'd0: begin
+                game_out <= (game_out == 0) ? NUM_GAMES - 1 : game_out - 1;
               end
               4'd1: begin
                 rows_out <= (rows_out == 1) ? 8 : rows_out - 1;
@@ -119,8 +155,11 @@ module config_state(
                 fg_b <= fg_b-1;
               end
               4'd9: begin
+                timbre_out <= timbre_out-1;
               end
               4'd10: begin
+                pitch_index <= pitch_index-1;
+                pitch_out <= pitches[3'(pitch_index-1)];
               end
               4'd11: begin
                 vol_out <= vol_out-1;
@@ -132,6 +171,7 @@ module config_state(
           end else if (key_presses[6])begin
             case(ptr_index_out)
               4'd0: begin
+                game_out <= (game_out == NUM_GAMES - 1) ? 0 : game_out + 1;
               end
               4'd1: begin
                 rows_out <= (rows_out == 8) ? 1 : rows_out + 1;
@@ -158,8 +198,11 @@ module config_state(
                 fg_b <= fg_b+1;
               end
               4'd9: begin
+                timbre_out <= timbre_out+1;
               end
               4'd10: begin
+                pitch_index <= pitch_index+1;
+                pitch_out <= pitches[3'(pitch_index+1)];
               end
               4'd11: begin
                 vol_out <= vol_out+1;
@@ -168,12 +211,27 @@ module config_state(
               end
             endcase
             state <= WRITE;
+            menu_index <= 0;
           end
         end
         WRITE: begin
           case (ptr_index_out)
             4'd0: begin
-              state <= IDLE;
+              // alternate between fetching and writing
+              menu_addr_out <= GAME_ROW_OFFSET+(8'(game_out) << 4)+menu_index;
+              if (menu_index > 2)begin
+                write_valid_out <= 1;
+                write_addr_out <= 125+menu_index;
+                write_data_out <= menu_data_in;
+              end else begin
+                write_valid_out <= 0;
+              end
+              if (menu_index == 14)begin
+                state <= IDLE;
+                menu_index <= 0;
+              end else begin
+                menu_index <= menu_index + 1;
+              end
             end
             4'd1: begin
               write_valid_out <= 1;
@@ -244,7 +302,7 @@ module config_state(
         end
       endcase
     end
-    prev_key_state <= key_state_in;
+    prev_key_state <= key_state_piped;
   end
 
   assign bg_color_out = {bg_r, bg_r, bg_g, bg_g, bg_b, bg_b};
