@@ -75,7 +75,7 @@ module config_state(
   always_ff @(posedge clk_in)begin
     if (rst_in)begin
       ptr_index_out <= 0;
-      active_processor_out <= 0;
+      active_processor_out <= 1; // TODO: set to 0 for final
 
       game_out <= 0;
 
