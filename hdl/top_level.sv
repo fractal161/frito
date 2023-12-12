@@ -365,7 +365,7 @@ module top_level(
       .clk_in(clk_100mhz_buf),
       .rst_in(sys_rst),
       //.val_in(debug_data),
-      .val_in(config_write_addr),
+      .val_in(pitch),
       .cat_out(ss_c),
       .an_out({ss0_an, ss1_an})
     );

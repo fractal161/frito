@@ -38,7 +38,7 @@ module config_state(
 
   localparam int NUM_GAMES = 6;
   localparam int GAME_ROW_OFFSET = 2048;
-  localparam int TIMBR_ROW_OFFSET = 2144;
+  localparam int TIMBRE_ROW_OFFSET = 2144;
 
   localparam int IDLE = 0;
   localparam int WRITE = 1;
@@ -65,7 +65,8 @@ module config_state(
 
   assign key_presses = key_state_piped & ~prev_key_state;
 
-  logic [9:0] pitches[3:0];
+  logic [9:0] pitches[7:0];
+  logic [11:0] pitches_bcd[7:0];
   logic [9:0] pitch_tmp;
   logic [2:0] pitch_index;
 
@@ -98,6 +99,15 @@ module config_state(
       pitches[6] <= 10'd784;
       pitches[7] <= 10'd880;
 
+      pitches_bcd[0] <= 12'h440;
+      pitches_bcd[1] <= 12'h493;
+      pitches_bcd[2] <= 12'h523;
+      pitches_bcd[3] <= 12'h587;
+      pitches_bcd[4] <= 12'h659;
+      pitches_bcd[5] <= 12'h698;
+      pitches_bcd[6] <= 12'h784;
+      pitches_bcd[7] <= 12'h880;
+
       timbre_out <= 0;
       pitch_out <= 10'd440;
       pitch_index <= 0;
@@ -122,9 +132,7 @@ module config_state(
               ptr_index_out <= ptr_index_out+1;
             end
           end else if (key_presses[0])begin
-            if (ptr_index_out == NUM_ROWS-1)begin
-              active_processor_out <= 1;
-            end
+            active_processor_out <= 1;
           end else if (key_presses[4])begin
             case(ptr_index_out)
               4'd0: begin
@@ -282,10 +290,45 @@ module config_state(
               state <= IDLE;
             end
             4'd9: begin
-              state <= IDLE;
+              menu_addr_out <= TIMBRE_ROW_OFFSET+(4'(timbre_out) << 2)+menu_index;
+              if (menu_index > 2)begin
+                write_valid_out <= 1;
+                write_addr_out <= 232+menu_index;
+                write_data_out <= menu_data_in;
+              end else begin
+                write_valid_out <= 0;
+              end
+              if (menu_index == 6)begin
+                state <= IDLE;
+                menu_index <= 0;
+              end else begin
+                menu_index <= menu_index + 1;
+              end
             end
             4'd10: begin
-              state <= IDLE;
+              case (menu_index)
+                0: begin
+                  write_valid_out <= 1;
+                  write_addr_out <= 314;
+                  write_data_out <= pitches_bcd[pitch_index][11:8];
+                  menu_index <= 1;
+                end
+                1: begin
+                  write_valid_out <= 1;
+                  write_addr_out <= 315;
+                  write_data_out <= pitches_bcd[pitch_index][7:4];
+                  menu_index <= 2;
+                end
+                2: begin
+                  write_valid_out <= 1;
+                  write_addr_out <= 316;
+                  write_data_out <= pitches_bcd[pitch_index][3:0];
+                  state <= IDLE;
+                  menu_index <= 0;
+                end
+                default: begin
+                end
+              endcase
             end
             4'd11: begin
               write_valid_out <= 1;
