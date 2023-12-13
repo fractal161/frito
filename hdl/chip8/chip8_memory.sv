@@ -385,6 +385,9 @@ module chip8_memory #(
 
   always_ff @(posedge clk_in)begin
     data_lo <= data_pool[chip_index_in];
+  end
+
+  always_ff @(posedge hdmi_clk_in)begin
     hdmi_data_out <= hdmi_data_pool[hdmi_index_in];
   end
 

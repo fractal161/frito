@@ -44,7 +44,7 @@ module video_multiplexer(
   logic [9:0] y;
   logic [9:0] y_piped;
 
-  pipeline #(.WIDTH(3), .DEPTH(2)) left_offset_pipe(
+  pipeline #(.WIDTH(3), .DEPTH(3)) left_offset_pipe(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(left_offset),
@@ -151,7 +151,7 @@ module video_multiplexer(
       if (vcount_in == 0)begin
         chip_index_out <= 0;
         vtally <= vstep + screen_height + (voff >> 1);
-      end else if (vcount_in == vtally+vstep+2)begin
+      end else if (vcount_in == vtally+vstep)begin
         if (10'd720-vcount_in > screen_height)begin
           chip_index_out <= chip_index_out + 1;
           vtally <= vtally + vstep + screen_height;
