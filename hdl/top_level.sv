@@ -490,6 +490,8 @@ module top_level(
   logic [7:0] red, green, blue; //red green and blue pixel values for output
   logic [7:0] chip8_red, chip8_green, chip8_blue; //red green and blue pixel values for output
   logic [5:0] hdmi_chip_index;
+  logic [3:0] rows;
+  logic [3:0] cols;
   video_multiplexer multiplexer1(
       .clk_in(clk_pixel_buf),
       .rst_in(sys_rst),
@@ -499,8 +501,8 @@ module top_level(
       .bg_color_in(bg_color),
       .fg_color_in(fg_color),
 
-      .rows_in(4'd6),
-      .cols_in(4'd6),
+      .rows_in(rows),
+      .cols_in(cols),
 
       .grid_in(1'b0),
 
@@ -545,6 +547,9 @@ module top_level(
       .bg_color_out(bg_color),
       .fg_color_out(fg_color),
 
+      .rows_out(rows),
+      .cols_out(cols),
+
       .timbre_out(timbre),
       .pitch_out(pitch),
       .vol_out(vol)
@@ -562,40 +567,40 @@ module top_level(
   logic [7:0] menu_tile;
   logic [7:0] buf_tile;
 
-  //config_video config_vid(
-  //    .clk_in(clk_pixel_buf),
-  //    .rst_in(sys_rst),
-  //    .hcount_in(hcount),
-  //    .vcount_in(vcount),
+  config_video config_vid(
+      .clk_in(clk_pixel_buf),
+      .rst_in(sys_rst),
+      .hcount_in(hcount),
+      .vcount_in(vcount),
 
-  //    .tile_row_in(tile_row),
-  //    .buf_read_data_in(buf_tile),
+      .tile_row_in(tile_row),
+      .buf_read_data_in(buf_tile),
 
-  //    .ptr_index_in(ptr_index),
+      .ptr_index_in(ptr_index),
 
-  //    .pixel_out(config_pixel),
+      .pixel_out(config_pixel),
 
-  //    .tile_addr_out(tile_addr),
-  //    .buf_read_addr_out(buf_read_addr)
-  //  );
+      .tile_addr_out(tile_addr),
+      .buf_read_addr_out(buf_read_addr)
+    );
 
-  //config_memory config_mem(
-  //    .clk_in(clk_pixel_buf),
-  //    .rst_in(sys_rst),
+  config_memory config_mem(
+      .clk_in(clk_pixel_buf),
+      .rst_in(sys_rst),
 
-  //    .tile_addr_in(tile_addr),
-  //    .menu_addr_in(menu_addr),
+      .tile_addr_in(tile_addr),
+      .menu_addr_in(menu_addr),
 
-  //    .buf_write_valid_in(config_write_valid),
-  //    .buf_write_addr_in(config_write_addr),
-  //    .buf_write_data_in(config_write_data),
+      .buf_write_valid_in(config_write_valid),
+      .buf_write_addr_in(config_write_addr),
+      .buf_write_data_in(config_write_data),
 
-  //    .buf_read_addr_in(buf_read_addr),
+      .buf_read_addr_in(buf_read_addr),
 
-  //    .tile_row_out(tile_row),
-  //    .menu_tile_out(menu_tile),
-  //    .buf_tile_out(buf_tile)
-  //  );
+      .tile_row_out(tile_row),
+      .menu_tile_out(menu_tile),
+      .buf_tile_out(buf_tile)
+    );
 
   always_comb begin
     red = active_processor ? chip8_red : config_pixel[23:16];

@@ -75,7 +75,7 @@ module config_state(
   always_ff @(posedge clk_in)begin
     if (rst_in)begin
       ptr_index_out <= 0;
-      active_processor_out <= 1; // TODO: set to 0 for final
+      active_processor_out <= 0;
 
       game_out <= 0;
 
@@ -140,10 +140,10 @@ module config_state(
                 game_out <= (game_out == 0) ? NUM_GAMES - 1 : game_out - 1;
               end
               4'd1: begin
-                rows_out <= (rows_out == 1) ? 8 : rows_out - 1;
+                rows_out <= (rows_out == 1) ? 6 : rows_out - 1;
               end
               4'd2: begin
-                cols_out <= (cols_out == 1) ? 8 : cols_out - 1;
+                cols_out <= (cols_out == 1) ? 6 : cols_out - 1;
               end
               4'd3: begin
                 bg_r <= bg_r-1;
