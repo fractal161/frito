@@ -122,6 +122,7 @@ module chip8_processor(
   //logic [15:0] stack [16];
 
   logic [15:0] key_snapshot;
+  logic [15:0] last_key_snapshot;
   logic [15:0] keys_just_pressed;
   logic [15:0] keys_released;
   assign keys_released = keys_just_pressed & (~key_snapshot);
@@ -181,6 +182,7 @@ module chip8_processor(
             state <= FETCH;
             chip_index_out <= 0;
             substate <= 0;
+            last_key_snapshot <= key_snapshot;
             key_snapshot <= key_state_in;
           end else begin
             mem_valid_out <= 0;
@@ -1230,8 +1232,28 @@ module chip8_processor(
             end
             LD_KEY: begin // Fx0A
               case (substate)
-                0: begin
-                  keys_just_pressed <= keys_just_pressed | key_snapshot;
+                0: begin // fetch key_state
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_KEYS;
+                    mem_we_out <= 0;
+                    mem_valid_out <= 1;
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 1;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                1: begin
+                  mem_valid_out <= 0;
+                  if (mem_valid_in)begin
+                    keys_just_pressed <= mem_data_in;
+                    substate <= substate + 1;
+                  end
+                end
+                2: begin
+                  // actually do the check
+                  keys_just_pressed <= keys_just_pressed | (key_snapshot & ~last_key_snapshot);
                   if (keys_released != 0)begin
                     // honestly too tired to figure out how to do this right
                     if (keys_released[0])begin
@@ -1267,14 +1289,13 @@ module chip8_processor(
                     end else begin
                       reg_tmp <= 15;
                     end
-                    substate <= substate+1;
+                    substate <= 3;
                   end else begin
                     pc <= pc-2;
-                    state <= FINISH;
-                    substate <= 0;
+                    substate <= 4;
                   end
                 end
-                1: begin // write to Vx
+                3: begin // write to Vx
                   keys_just_pressed <= 0;
                   if (mem_ready_in)begin
                     mem_addr_out <= opcode[11:8];
@@ -1283,12 +1304,46 @@ module chip8_processor(
                     mem_data_out <= reg_tmp;
                     mem_type_out <= PROC_MEM_TYPE_REG;
                     mem_size_out <= 0;
+                    substate <= substate+1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                4: begin // write high of keys_just_pressed
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_KEYS;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= keys_just_pressed[15:8];
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
+                    substate <= substate + 1;
+                  end else begin
+                    mem_valid_out <= 0;
+                  end
+                end
+                5: begin // write low of keys_just_pressed
+                  if (mem_ready_in)begin
+                    mem_addr_out <= REG_KEYS+1;
+                    mem_we_out <= 1;
+                    mem_valid_out <= 1;
+                    mem_data_out <= keys_just_pressed[7:0];
+                    mem_type_out <= PROC_MEM_TYPE_REG;
+                    mem_size_out <= 0;
                     state <= FINISH;
                     substate <= 0;
                   end else begin
                     mem_valid_out <= 0;
                   end
                 end
+                //6: begin
+                //  if (mem_ready_in)begin
+                //    state <= FINISH;
+                //    substate <= 0;
+                //  end else begin
+                //    mem_valid_out <= 0;
+                //  end
+                //end
                 default: begin
                   error_out <= ERR_EXEC;
                 end
@@ -1840,7 +1895,7 @@ module chip8_processor(
           // wait a few cycles for write to propogate
           if (substate == 6)begin
             substate <= 0;
-            if (chip_index_out == 3)begin
+            if (chip_index_out == 35)begin
               chip_index_out <= 0;
               state <= IDLE;
             end else begin

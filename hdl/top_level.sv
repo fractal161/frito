@@ -499,8 +499,8 @@ module top_level(
       .bg_color_in(bg_color),
       .fg_color_in(fg_color),
 
-      .rows_in(4'd2),
-      .cols_in(4'd2),
+      .rows_in(4'd6),
+      .cols_in(4'd6),
 
       .grid_in(1'b0),
 

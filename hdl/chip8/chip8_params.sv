@@ -35,3 +35,4 @@ parameter int REG_PC = 18;
 parameter int REG_SP = 20;
 parameter int REG_DT = 21;
 parameter int REG_ST = 22;
+parameter int REG_KEYS = 23;

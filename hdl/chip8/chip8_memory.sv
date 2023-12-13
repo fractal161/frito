@@ -119,7 +119,7 @@ module chip8_memory #(
   logic [WIDTH-1:0] data_hi;
   logic [WIDTH-1:0] data_lo;
 
-  localparam NUM_CHIPS = 4;
+  localparam NUM_CHIPS = 36;
 
   logic [WIDTH-1:0] data_pool[0:NUM_CHIPS-1];
   logic [WIDTH-1:0] hdmi_data_pool[0:NUM_CHIPS-1];
