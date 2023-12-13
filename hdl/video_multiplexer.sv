@@ -51,14 +51,14 @@ module video_multiplexer(
       .val_out(left_offset_piped)
     );
 
-  pipeline #(.WIDTH(11), .DEPTH(2)) x_pipe(
+  pipeline #(.WIDTH(11), .DEPTH(3)) x_pipe(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(x),
       .val_out(x_piped)
     );
 
-  pipeline #(.WIDTH(10), .DEPTH(2)) y_pipe(
+  pipeline #(.WIDTH(10), .DEPTH(3)) y_pipe(
       .clk_in(clk_in),
       .rst_in(rst_in),
       .val_in(y),
